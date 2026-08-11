@@ -1,15 +1,7 @@
-/*
- * @Author: qinghuan 1484237245@qq.com
- * @Date: 2024-12-24 08:39:07
- * @FilePath: /tide_controls_full/src/tide_control/tide_hw_interface/src/tide_motor.cpp
- * @Description:
- *
- * Copyright (c) 2024 by qinghuan, All Rights Reserved.
- */
-#include "tide_motor.hpp"
+#include "spr_motor.hpp"
 #include <cmath>
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 DJI_Motor::DJI_Motor(const Motor_Config_t& config)
 {
@@ -17,18 +9,20 @@ DJI_Motor::DJI_Motor(const Motor_Config_t& config)
   last_time_ = rclcpp::Clock().now();
   last_comm_time_ = last_time_;
 }
-
+//解包电机信号
 void DJI_Motor::decode_feedback()
 {
   measure.last_ecd = measure.ecd;
   measure.ecd = rx_buff[0] << 8 | rx_buff[1];
+//低通滤波     y[n]=(1−α)⋅y[n−1]+α⋅x[n]
   measure.speed_aps =
       (1.0f - SPEED_SMOOTH_COEF) * measure.speed_aps +
       act2vel * SPEED_SMOOTH_COEF * (double)((int16_t)(rx_buff[2] << 8 | rx_buff[3]));
   measure.real_current = (1.0f - CURRENT_SMOOTH_COEF) * measure.real_current +
                          CURRENT_SMOOTH_COEF * (double)((int16_t)(rx_buff[4] << 8 | rx_buff[5]));
+  
   measure.temperature = rx_buff[6];
-
+//编码值跳变
   if (measure.ecd - measure.last_ecd > 4096)
     measure.total_round--;
   else if (measure.ecd - measure.last_ecd < -4096)
@@ -49,7 +43,7 @@ void DJI_Motor::decode_feedback()
 
   angle_current = normalized_angle;
 }
-
+//检查连接
 bool DJI_Motor::check_connection(const rclcpp::Time& current_time)
 {
   if (config_.motor_type == VIRTUAL_JOINT)
@@ -71,4 +65,4 @@ bool DJI_Motor::check_connection(const rclcpp::Time& current_time)
   return (status == MOTOR_OK);
 }
 
-}  // namespace tide_hw_interface
+}  // namespace spr_hw_interface

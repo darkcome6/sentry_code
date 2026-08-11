@@ -1,26 +1,17 @@
-/*
- * @Author: qinghuan 1484237245@qq.com
- * @Date: 2024-12-24 08:36:23
- * @FilePath: /tide_controls_full/src/tide_control/tide_hw_interface/include/tide_motor.hpp
- * @Description:
- *
- * Copyright (c) 2024 by qinghuan, All Rights Reserved.
- */
 #ifndef TIDE_MOTOR_HPP_
 #define TIDE_MOTOR_HPP_
-
 #include <rclcpp/rclcpp.hpp>
 #include <array>
 #include <string>
-#include <cmath>
+#include <cmath>//M_PI常量
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
-constexpr double SPEED_SMOOTH_COEF = 0.85f;
-constexpr double CURRENT_SMOOTH_COEF = 0.9f;
-constexpr double act2pos = 0.0007670840;        // 2PI/8192
-constexpr double act2vel = 0.1047197551;        // 2PI/60
-constexpr double MOTOR_WATCHDOG_TIMEOUT = 1.0;  // 电机通信超时时间，单位秒
+ constexpr double SPEED_SMOOTH_COEF = 0.85f;  //速度平滑系数
+ constexpr double CURRENT_SMOOTH_COEF = 0.9f;//电流平滑系数
+ constexpr double act2pos = 0.0007670840;        // 2PI/8192  编码值转弧度
+ constexpr double act2vel = 0.1047197551;        // 2PI/60 rpm转弧度
+ constexpr double MOTOR_WATCHDOG_TIMEOUT = 1.0;  // 电机通信超时时间，单位秒
 
 typedef enum
 {
@@ -67,19 +58,16 @@ public:
     uint8_t temperature{ 0 };
     double total_angle{ 0.0 };
     int32_t total_round{ 0 };
-
     Measure() = default;
   };
-
   Motor_Status_e status = MOTOR_LOST;
-
   Motor_Config_t config_;
   Measure measure;
   std::array<uint8_t, 8> rx_buff = { 0 };
   int16_t output = 0;
   double angle_current = 0.0;
 
-  explicit DJI_Motor(const Motor_Config_t& config);
+  DJI_Motor(const Motor_Config_t& config);
   void decode_feedback();
   void stop() { output = 0; }
 
@@ -90,7 +78,5 @@ private:
   rclcpp::Time last_time_{ 0, 0, RCL_ROS_TIME };
   rclcpp::Time last_comm_time_{ 0, 0, RCL_ROS_TIME };
 };
-
-}  // namespace tide_hw_interface
-
+}  // namespace spr_hw_interface
 #endif

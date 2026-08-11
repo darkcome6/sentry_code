@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<library path="spr_hw_interface">
+  <class name="spr_hw_interface/SprHardwareInterface"
+         type="spr_hw_interface::SprHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Hardware Interface for Spr robot motors using ros2_control.
+    </description>
+  </class>
+</library>

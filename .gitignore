@@ -1,0 +1,14 @@
+# VS Code
+.vscode/
+
+# ROS2 / colcon build artifacts
+build/
+install/
+log/
+
+# Compiled objects
+*.o
+*.so
+*.a
+*.pyc
+__pycache__/
