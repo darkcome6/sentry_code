@@ -53,10 +53,6 @@ void CanDevice::receiveLoop()
     }
   }
 }
-// ===== SprHardwareInterface 实现 =====
-// 注意：类 SprHardwareInterface 的定义只在头文件 spr_hw_interface.hpp 中，
-// 本 .cpp 只写各成员函数的实现，不要重复定义类体。
-
 SprHardwareInterface::SprHardwareInterface()
 :hardware_interface::SystemInterface()
 {
@@ -146,9 +142,10 @@ SprHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
       else if (key == "offset")
         config.offset = std::stoi(value);
     }
-    // 创建电机对象并存储在 motors_ 映射中
-    motors_[config.motor_name] = std::make_shared<DJI_Motor>(config);
-    configureMotorCan(motors_[config.motor_name]);
+    // 创建电机对象，配置 CAN，存入 motors_ 数组（顺序对应 info_.joints）
+    auto motor = std::make_shared<DJI_Motor>(config);
+    configureMotorCan(motor);
+    motors_.push_back(motor);
   }
   // 初始化 CAN 设备
     for (size_t i = 0; i < can_device_count_; i++)
@@ -214,7 +211,6 @@ SprHardwareInterface::on_cleanup(const rclcpp_lifecycle::State& previous_state)
 {
     try
   {
-    stop_thread_ = true;
     can_devices_.clear();
     motors_.clear();
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -229,22 +225,145 @@ SprHardwareInterface::on_cleanup(const rclcpp_lifecycle::State& previous_state)
 std::vector<hardware_interface::StateInterface> 
 SprHardwareInterface::export_state_interfaces()
 {
-    
+  std::vector<hardware_interface::StateInterface> interfaces;
+  /*
+  StateInterface 对象(
+    prefix_name_   = "left_wheel",      // info_.joints[i].name
+    interface_name_ = "position",       // state_interface.name
+    value_ptr_     = &state_positions_[i]  // 指向状态数组第 i 个元素
+    );
+  */
+  for (size_t i = 0; i < joint_count; i++)
+  {
+    for (const auto& state_interface : info_.joints[i].state_interfaces)
+    {
+      if (state_interface.name == "position")
+      {
+        interfaces.emplace_back(info_.joints[i].name, state_interface.name, &state_positions_[i]);
+      }
+      else if (state_interface.name == "velocity")
+      {
+        interfaces.emplace_back(info_.joints[i].name, state_interface.name, &state_velocities_[i]);
+      }
+      else if (state_interface.name == "effort")
+      {
+        interfaces.emplace_back(info_.joints[i].name, state_interface.name, &state_currents_[i]);
+      }
+    }
+  }
+  return interfaces;  
 };
 std::vector<hardware_interface::CommandInterface> 
 SprHardwareInterface::export_command_interfaces()
 {
+  std::vector<hardware_interface::CommandInterface> interfaces;
+  for (size_t i = 0; i < joint_count; i++)
+  {
+    for (const auto& command_interface : info_.joints[i].command_interfaces)
+    {
+      if (command_interface.name == "position")
+      {
+        interfaces.emplace_back(info_.joints[i].name, command_interface.name, &cmd_positions_[i]);
+      }
+      else if (command_interface.name == "velocity")
+      {
+        interfaces.emplace_back(info_.joints[i].name, command_interface.name, &cmd_velocities_[i]);
+      }
+    }
+  }
+  return interfaces;
     
 };
 hardware_interface::return_type 
-SprHardwareInterface::read()
+SprHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
-    
+  auto current_time = time;
+  for (size_t i = 0; i < joint_count; i++){
+      auto& motor = motors_[i];  
+      motor->check_connection(current_time);
+      state_positions_[i] = motor->angle_current;
+      state_velocities_[i] = motor->measure.speed_aps;
+      state_currents_[i] = motor->measure.real_current;
+      state_temperatures_[i] = motor->measure.temperature;
+  }
+  return hardware_interface::return_type::OK;
 };
 hardware_interface::return_type 
-SprHardwareInterface::write()
+SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
-    
+    //清空每个can设备的发送缓冲区,防止数据残留
+    for (auto can_device : can_devices_)
+  {
+    for (size_t i = 0; i < 3; i++)
+    {
+      can_device->tx_buff[i].fill(0);
+    }
+  }
+  //根据电机类型和命令接口，填充每个电机的发送缓冲区
+  //1.从命令接口获取命令数值
+  for (size_t i = 0; i < joint_count; i++)
+  {
+    double command = 0.0;
+    if (!std::isnan(cmd_positions_[i]) && info_.joints[i].command_interfaces[0].name == "position")
+    {
+      command = (cmd_positions_[i]);
+    }
+    else if (!std::isnan(cmd_velocities_[i]) &&
+             info_.joints[i].command_interfaces[0].name == "velocity")
+    {
+      command = cmd_velocities_[i];
+    }
+
+    auto motor = motors_[i];
+    //将命令数值转换为电机输出值，并写入电机对象
+    motor->output = static_cast<int16_t>(command);
+    //2.检查电机,将命令数值写入缓存区
+    auto current_time = time;
+    if(motor->check_connection(current_time))
+    {
+    for (auto can_device : can_devices_)
+      {
+        if (motor->config_.can_bus == can_device->interface)
+        {
+           /*根据电机的报文标识符选择发送缓冲区的索引 
+           一帧能和控制四个但是这四个电机的标识符必须一样
+            但是既可能是0x200也可能是0x1ff也可能是0X2ff
+           */
+          size_t buff_index = (motor->config_.identifier == 0x200) ? 0 :
+                              (motor->config_.identifier == 0x1ff) ? 1 :2;
+          
+          /*在这帧里的第几个字节大疆的电机一帧带四个电机的电流
+                组内槽位 tx_id	占据的字节位置	data_index
+                    1	          字节 0、1	        0
+                    2	          字节 2、3	        2
+                    3	          字节 4、5	        4
+                    4	          字节 6、7	        6
+          */
+          size_t data_index = (motor->config_.tx_id - 1) * 2;
+
+          can_device->tx_buff[buff_index][data_index] = motor->output >> 8;
+          can_device->tx_buff[buff_index][data_index + 1] = motor->output & 0xff;
+
+          break;
+        }
+      }
+    }
+  }
+    for (auto can_device : can_devices_)
+  {
+    for (size_t i = 0; i < 3; i++)
+    {
+      /*
+        条件	                 结果 id
+        i == 0                   成立	0x200
+        i == 0                   不成立，且 i == 1 成立	0x1ff
+        以上都不成立（i == 2）	  0x2ff
+      */
+      auto id = (i == 0) ? 0x200 : (i == 1) ? 0x1ff : 0x2ff;
+      bool result = sendCanFrame(can_device, can_device->tx_buff[i].data(), 8, id);
+    }
+  }
+  return hardware_interface::return_type::OK;
 };
 
 // ===== 配置电机的 CAN ID 和报文标识符 =====
@@ -291,6 +410,22 @@ void SprHardwareInterface::configureMotorCan(std::shared_ptr<DJI_Motor> motor)
     default:
       return;
   }
+}
+//
+bool SprHardwareInterface::sendCanFrame(std::shared_ptr<CanDevice> device, const uint8_t* data, size_t len, uint32_t id)
+{
+    try
+  {//创建CANid对象,设置帧类型为数据帧,标准帧
+    CanId send_id(id, 0, FrameType::DATA, StandardFrame);
+    device->sender->send(data, len, send_id, std::chrono::milliseconds(1));
+  }
+  catch (const std::exception& e)
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Failed to send CAN frame: %s",
+                 e.what());
+    return false;
+  }
+  return true;
 }
 // ===== 停止所有电机 =====
 void SprHardwareInterface::stopMotors()

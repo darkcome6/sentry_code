@@ -5,6 +5,7 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "spr_motor.hpp"
+
 #include "socket_can/socket_can_sender.hpp"
 #include "socket_can/socket_can_receiver.hpp"
 
@@ -30,8 +31,12 @@ public:
   std::shared_ptr<SocketCanReceiver> receiver;//接收器
   std::shared_ptr<std::thread> receiver_thread;//接收线程
   std::shared_ptr<std::atomic<bool>> thread_running;//线程运行标志
-  std::array<std::array<uint8_t, 8>, 3> tx_buff{};//发送缓冲区
-
+  std::array<std::array<uint8_t, 8>, 3> tx_buff{};//发送缓冲区3个
+  /*
+  tx_buff[0] → [u8, u8, u8, u8, u8, u8, u8, u8]   // 8 字节（帧0）
+  tx_buff[1] → [u8, u8, u8, u8, u8, u8, u8, u8]   // 8 字节（帧1）
+  tx_buff[2] → [u8, u8, u8, u8, u8, u8, u8, u8]   // 8 字节（帧2）
+  */
 private:
   void receiveLoop();
   ReceiveCallback receive_callback_;
@@ -53,13 +58,17 @@ public:
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
-  hardware_interface::return_type read() override;
-  hardware_interface::return_type write() override;
-  void configureMotorCan(std::shared_ptr<DJI_Motor> motor);
+  hardware_interface::return_type read(const rclcpp::Time& time,
+                                       const rclcpp::Duration& period) override;
+  hardware_interface::return_type write(const rclcpp::Time& time,
+                                        const rclcpp::Duration& period) override;
+
 private:
-    //字典存储
-    std::map<std::string, std::shared_ptr<CanDevice>> can_devices_;//CAN设备映射
-    std::map<std::string, std::shared_ptr<DJI_Motor>> motors_;//电机映射
+    void configureMotorCan(std::shared_ptr<DJI_Motor> motor);
+    bool sendCanFrame(std::shared_ptr<CanDevice> device, const uint8_t* data, size_t len, uint32_t id);
+    void stopMotors();
+    std::vector<std::shared_ptr<CanDevice>> can_devices_;//CAN设备映射
+    std::vector<std::shared_ptr<DJI_Motor>> motors_;//电机映射
     
     size_t joint_count{ 0 };
     size_t can_device_count_{ 0 };
@@ -70,8 +79,6 @@ private:
     std::vector<double> state_velocities_;
     std::vector<double> state_currents_;
     std::vector<double> state_temperatures_;
-    //线程安全
-    std::atomic<bool> stop_thread_{ false };
 };
 }// namespace spr_hw_interface
 #endif  // SPR_HARDWARE_INTERFACE_HPP
