@@ -70,7 +70,8 @@ private:
     std::vector<double> state_velocities_;
     std::vector<double> state_currents_;
     std::vector<double> state_temperatures_;
-    
+    //线程安全
+    std::atomic<bool> stop_thread_{ false };
 };
 }// namespace spr_hw_interface
 #endif  // SPR_HARDWARE_INTERFACE_HPP

@@ -180,21 +180,50 @@ SprHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state)
 {
-    
+  std::fill(state_positions_.begin(), state_positions_.end(), 0.0);
+  std::fill(state_velocities_.begin(), state_velocities_.end(), 0.0);
+  std::fill(state_currents_.begin(), state_currents_.end(), 0.0);
+  std::fill(state_temperatures_.begin(), state_temperatures_.end(), 0.0);
+  std::fill(cmd_positions_.begin(), cmd_positions_.end(), 0.0);
+  std::fill(cmd_velocities_.begin(), cmd_velocities_.end(), 0.0);
+  return hardware_interface::CallbackReturn::SUCCESS;
 };
+
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
-    
+   return hardware_interface::CallbackReturn::SUCCESS;   
 };
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
-    
+    try
+  {
+    stopMotors();
+    return hardware_interface::CallbackReturn::SUCCESS;
+  }
+  catch (const std::exception& e)
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Error in on_deactivate: %s",
+                 e.what());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 };
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_cleanup(const rclcpp_lifecycle::State& previous_state)
 {
+    try
+  {
+    stop_thread_ = true;
+    can_devices_.clear();
+    motors_.clear();
+    return hardware_interface::CallbackReturn::SUCCESS;
+  }
+  catch (const std::exception& e)
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Error in on_cleanup: %s", e.what());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
     
 };
 std::vector<hardware_interface::StateInterface> 
@@ -263,5 +292,12 @@ void SprHardwareInterface::configureMotorCan(std::shared_ptr<DJI_Motor> motor)
       return;
   }
 }
-
+// ===== 停止所有电机 =====
+void SprHardwareInterface::stopMotors()
+{
+  for (auto& motor : motors_)
+  {
+    motor->stop();
+  }
+}
 }  // namespace spr_hw_interface
