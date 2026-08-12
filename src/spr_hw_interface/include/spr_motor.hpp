@@ -41,8 +41,8 @@ typedef struct
   std::string can_bus;
   uint32_t tx_id;
   uint32_t rx_id;
-  uint32_t identifier;
-  uint16_t offset;
+  uint32_t identifier;//报文标识符
+  uint16_t offset;//电机编码器零点偏移
   Motor_Type_e motor_type;
 } Motor_Config_t;
 

@@ -3,7 +3,7 @@
 <package format="3">
   <name>spr_hw_interface</name>
   <version>0.0.0</version>
-  <description>package for hardware interface</description>
+  <description>package for harwardare</description>
   <maintainer email="2786573564@qq.com">qinghuan</maintainer>
   <license>TODO: License declaration</license>
 
@@ -12,7 +12,7 @@
   <depend>rclcpp</depend>
   <depend>can_msgs</depend>
   <depend>rclcpp_components</depend>
-  <depend>spr_msgs</depend>
+  <depend>tide_msgs</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>lifecycle_msgs</depend>
   <depend>control_toolbox</depend>

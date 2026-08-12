@@ -55,6 +55,7 @@ public:
 
   hardware_interface::return_type read() override;
   hardware_interface::return_type write() override;
+  void configureMotorCan(std::shared_ptr<DJI_Motor> motor);
 private:
     //字典存储
     std::map<std::string, std::shared_ptr<CanDevice>> can_devices_;//CAN设备映射
@@ -67,6 +68,8 @@ private:
     std::vector<double> cmd_velocities_;
     std::vector<double> state_positions_;
     std::vector<double> state_velocities_;
+    std::vector<double> state_currents_;
+    std::vector<double> state_temperatures_;
     
 };
 }// namespace spr_hw_interface
