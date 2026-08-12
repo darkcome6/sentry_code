@@ -436,3 +436,7 @@ void SprHardwareInterface::stopMotors()
   }
 }
 }  // namespace spr_hw_interface
+
+
+#include "pluginlib/class_list_macros.hpp"
+PLUGINLIB_EXPORT_CLASS(spr_hw_interface::SprHardwareInterface, hardware_interface::SystemInterface)
