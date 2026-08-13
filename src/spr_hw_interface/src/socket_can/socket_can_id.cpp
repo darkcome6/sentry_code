@@ -20,7 +20,7 @@
 
 #include "socket_can/socket_can_id.hpp"
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 // lint -e{9006} NOLINT false positive: this expression is compile time evaluated
 static_assert(MAX_DATA_LENGTH == sizeof(std::declval<struct can_frame>().data),

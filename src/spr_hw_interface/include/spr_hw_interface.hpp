@@ -18,6 +18,15 @@
 
 namespace spr_hw_interface
 {
+// socket_can 库源自 tide_hw_interface 项目，这里将其类型引入当前命名空间，
+// 以便本命名空间内直接使用 SocketCanSender 等类型
+using spr_hw_interface::CanId;
+using spr_hw_interface::FrameType;
+using spr_hw_interface::SocketCanReceiver;
+using spr_hw_interface::SocketCanSender;
+using spr_hw_interface::SocketCanTimeout;
+using spr_hw_interface::StandardFrame;
+
 class CanDevice
 {
 public:

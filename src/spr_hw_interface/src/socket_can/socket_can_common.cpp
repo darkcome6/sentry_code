@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 ////////////////////////////////////////////////////////////////////////////////
 int32_t bind_can_socket(const std::string& interface, bool enable_fd)

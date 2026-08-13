@@ -27,7 +27,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 ////////////////////////////////////////////////////////////////////////////////
 SocketCanSender::SocketCanSender(const std::string& interface, const bool enable_fd,

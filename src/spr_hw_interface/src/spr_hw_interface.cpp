@@ -11,10 +11,10 @@ namespace spr_hw_interface
 {
   CanDevice::CanDevice(const std::string& interface_name, ReceiveCallback callback)
   : interface(interface_name),
-    receive_callback_(callback),//将传入的会u到函数赋值给类成员函数
     sender(std::make_shared<SocketCanSender>(interface_name)),
     receiver(std::make_shared<SocketCanReceiver>(interface_name)),
-    thread_running(std::make_shared<std::atomic<bool>>(true))
+    thread_running(std::make_shared<std::atomic<bool>>(true)),
+    receive_callback_(callback)//将传入的回调函数赋值给类成员函数
   {
     receiver_thread = std::make_shared<std::thread>(&CanDevice::receiveLoop, this);
   };
@@ -166,7 +166,7 @@ struct InterfaceInfo
         }
         else
         {
-          RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Unknown motor type: %s",
+          RCLCPP_ERROR(rclcpp::get_logger("SprHardwareInterface"), "Unknown motor type: %s",
                        value.c_str());
         }
       }
@@ -214,6 +214,7 @@ struct InterfaceInfo
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state)
 {
+  (void)previous_state;
   std::fill(state_positions_.begin(), state_positions_.end(), 0.0);
   std::fill(state_velocities_.begin(), state_velocities_.end(), 0.0);
   std::fill(state_currents_.begin(), state_currents_.end(), 0.0);
@@ -226,11 +227,13 @@ SprHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
+   (void)previous_state;
    return hardware_interface::CallbackReturn::SUCCESS;   
 };
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
+    (void)previous_state;
     try
   {
     stopMotors();
@@ -238,7 +241,7 @@ SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_stat
   }
   catch (const std::exception& e)
   {
-    RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Error in on_deactivate: %s",
+    RCLCPP_ERROR(rclcpp::get_logger("SprHardwareInterface"), "Error in on_deactivate: %s",
                  e.what());
     return hardware_interface::CallbackReturn::ERROR;
   }
@@ -246,6 +249,7 @@ SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_stat
 hardware_interface::CallbackReturn 
 SprHardwareInterface::on_cleanup(const rclcpp_lifecycle::State& previous_state)
 {
+    (void)previous_state;
     try
   {
     can_devices_.clear();
@@ -254,7 +258,7 @@ SprHardwareInterface::on_cleanup(const rclcpp_lifecycle::State& previous_state)
   }
   catch (const std::exception& e)
   {
-    RCLCPP_ERROR(rclcpp::get_logger("TideHardwareInterface"), "Error in on_cleanup: %s", e.what());
+    RCLCPP_ERROR(rclcpp::get_logger("SprHardwareInterface"), "Error in on_cleanup: %s", e.what());
     return hardware_interface::CallbackReturn::ERROR;
   }
     
@@ -314,6 +318,7 @@ SprHardwareInterface::export_command_interfaces()
 hardware_interface::return_type 
 SprHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+  (void)period;
   auto current_time = time;
   for (size_t i = 0; i < joint_count; i++){
       auto& motor = motors_[i];  
@@ -328,6 +333,7 @@ SprHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& per
 hardware_interface::return_type 
 SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+    (void)period;
     //清空每个can设备的发送缓冲区,防止数据残留
     for (auto can_device : can_devices_)
   {
@@ -393,11 +399,11 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
       /*
         条件	                 结果 id
         i == 0                   成立	0x200
-        i == 0                   不成立，且 i == 1 成立	0x1ff
+                   不成立，且 i == 1 成立	0x1ff
         以上都不成立（i == 2）	  0x2ff
       */
       auto id = (i == 0) ? 0x200 : (i == 1) ? 0x1ff : 0x2ff;
-      bool result = sendCanFrame(can_device, can_device->tx_buff[i].data(), 8, id);
+      sendCanFrame(can_device, can_device->tx_buff[i].data(), 8, id);
     }
   }
   return hardware_interface::return_type::OK;
