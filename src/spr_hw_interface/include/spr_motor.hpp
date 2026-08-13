@@ -16,6 +16,8 @@ namespace spr_hw_interface
 typedef enum
 {
   MOTOR_TYPE_NONE = 0,
+  DM6006,
+  DM4310,
   GM6020,
   M3508,
   M2006,
@@ -25,7 +27,8 @@ typedef enum
 typedef enum
 {
   MOTOR_LOST = 0,
-  MOTOR_OK,
+  MOTOR_UNACTIVE,
+  MOTOR_ACTIVE,
 } Motor_Status_e;
 
 typedef enum

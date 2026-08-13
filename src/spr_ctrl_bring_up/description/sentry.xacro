@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="sentry">
+    <xacro:include filename="$(find spr_sentry_description)/sentry.urdf.xacro" />
+    <ros2_control name="SprHardwareInterface" type="system">
+        <hardware>
+            <plugin>spr_hw_interface/SprHardwareInterface</plugin>
+            <param name="can_device_count_" value="2" />
+        </hardware>
+<!--
+std::string motor_name;
+  std::string can_bus;
+  uint32_t tx_id;
+  uint32_t rx_id;
+  uint32_t identifier;//报文标识符
+  uint16_t offset;//电机编码器零点偏移
+  Motor_Type_e motor_type;
+
+  typedef enum
+    {
+        MOTOR_TYPE_NONE = 0,
+        DM6006,
+        DM4310,
+        GM6020,
+        M3508,
+        M2006,
+        VIRTUAL_JOINT,
+    } Motor_Type_e;-->
+        <joint name="bigyaw_joint">
+            <param name="motor_name" value="bigyaw_motor" />
+            <param name="can_bus" value="can0" />
+            <param name="tx_id" value="1" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="DM6006" />
+            <command_interface name="position" />
+            <command_interface name="velocity" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="small_yaw_joint">
+            <param name="motor_name" value="small_yaw_motor" />
+            <param name="can_bus" value="can0" />
+            <param name="tx_id" value="2" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="GM6020" />
+            <command_interface name="position" />
+            <command_interface name="velocity" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="pitch_joint">
+            <param name="motor_name" value="pitch_motor" />
+            <param name="can_bus" value="can0" />
+            <param name="tx_id" value="3" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="DM4310" />
+            <command_interface name="position" />
+            <command_interface name="velocity" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="left_wheel_front_joint">
+            <param name="motor_name" value="left_wheel_front_motor" />
+            <param name="can_bus" value="can1" />
+            <param name="tx_id" value="1" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="M3508" />
+            <command_interface name="velocity" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="right_wheel_front_joint">
+            <param name="motor_name" value="right_wheel_front_motor" />
+            <param name="can_bus" value="can1" />
+            <param name="tx_id" value="2" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="M3508" />
+            <command_interface name="velocity" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="left_wheel_back_joint">
+            <param name="motor_name" value="left_wheel_back_motor" />
+            <param name="can_bus" value="can1" />
+            <param name="tx_id" value="3" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="M3508" />
+            <command_interface name="velocity" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="right_wheel_back_joint">
+            <param name="motor_name" value="right_wheel_back_motor" />
+            <param name="can_bus" value="can1" />
+            <param name="tx_id" value="4" />
+            <param name="offset" value="0" />
+            <param name="motor_type" value="M3508" />
+            <command_interface name="velocity" />
+            <state_interface name="velocity" />
+        </joint>
+    </ros2_control>
+</robot>    

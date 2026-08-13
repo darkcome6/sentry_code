@@ -81,6 +81,37 @@ hardware_interface::CallbackReturn
 SprHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
 {
   // 先调用基类 on_init：解析并保存 info_（含 joints / 参数）
+  /*
+  struct HardwareInfo
+{
+  std::string name;                    // 机器人名，如 "sentry"
+  std::string type;                    // "system"（来自 ros2_control type="system"）
+  std::string hardware_plugin_name;    // "spr_hw_interface/SprHardwareInterface"
+  std::unordered_map<std::string, std::string> hardware_parameters;  // <hardware> 下的参数
+  std::vector<JointInfo> joints;       // 每个 <joint>
+  std::vector<SensorInfo> sensors;     // <sensor>（你没有，空）
+  std::vector<GpioInfo> gpios;         // <gpio>（你没有，空）
+  std::vector<TransmissionInfo> transmissions;  // <transmission>（没有，空）
+  uint32_t rw_rate;                    // 读写速率
+};
+
+struct JointInfo
+{
+  std::string name;                         // 如 "bigyaw_joint"
+  std::string type;                         // URDF 关节类型 "continuous"
+  std::vector<InterfaceInfo> state_interfaces;    // <state_interface> 列表
+  std::vector<InterfaceInfo> command_interfaces;  // <command_interface> 列表
+  std::unordered_map<std::string, std::string> parameters;  // <param> 列表
+};
+
+struct InterfaceInfo
+{
+  std::string name;   // "position" / "velocity" / "effort" ...
+  std::string min;
+  std::string max;
+};
+
+  */
   if (hardware_interface::SystemInterface::on_init(info) !=
       hardware_interface::CallbackReturn::SUCCESS)
   {
@@ -147,6 +178,12 @@ SprHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
     configureMotorCan(motor);
     motors_.push_back(motor);
   }
+  // 从 URDF <hardware> 参数读取 CAN 设备数量
+  auto it = info_.hardware_parameters.find("can_device_count_");
+  if (it != info_.hardware_parameters.end())
+  {
+    can_device_count_ = std::stoul(it->second);
+  }
   // 初始化 CAN 设备
     for (size_t i = 0; i < can_device_count_; i++)
   {
@@ -159,7 +196,7 @@ SprHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
       {
         if (motor->config_.can_bus == bus_name && motor->config_.rx_id == can_id)
         {
-          motor->status = MOTOR_OK;
+          motor->status = MOTOR_ACTIVE;
           motor->rx_buff = data;
           motor->decode_feedback();
           motor->update_timestamp(current_time);
@@ -406,6 +443,12 @@ void SprHardwareInterface::configureMotorCan(std::shared_ptr<DJI_Motor> motor)
         motor->config_.tx_id -= 4;//tx_id -= 4：把"全局电机号 5~8"换算成"该控制帧内的槽位 1~4"一帧带四个电机
         motor->config_.identifier = 0x2ff;
       }
+      break;
+    case DM4310:
+      motor->config_.rx_id = 0x100 + motor->config_.tx_id;
+      break;
+    case DM6006:
+      motor->config_.rx_id = 0x100 + motor->config_.tx_id;
       break;
     default:
       return;

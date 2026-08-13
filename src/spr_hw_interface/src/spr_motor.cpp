@@ -48,7 +48,7 @@ bool DJI_Motor::check_connection(const rclcpp::Time& current_time)
 {
   if (config_.motor_type == VIRTUAL_JOINT)
   {
-    status = MOTOR_OK;
+    status = MOTOR_ACTIVE;
     return true;
   }
 
@@ -62,7 +62,7 @@ bool DJI_Motor::check_connection(const rclcpp::Time& current_time)
     return false;
   }
 
-  return (status == MOTOR_OK);
+  return (status != MOTOR_LOST);
 }
 
 }  // namespace spr_hw_interface
