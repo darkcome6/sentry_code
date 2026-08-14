@@ -49,7 +49,7 @@
   </joint>
   <link name="small_yaw_link">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0 0 0.1" rpy="0 0 0" />
       <material name="">
         <color rgba="0 0 1 1" />
       </material>
@@ -88,7 +88,7 @@
     </collision>
   </link>
   <joint name="pitch_joint" type="continuous">
-    <origin xyz="0 0 0.15" rpy="0 0 0" />
+    <origin xyz="0 0 0.25" rpy="0 0 0" />
     <parent link="small_yaw_link" />
     <child link="pitch_link" />
     <axis xyz="0 1 0" />
