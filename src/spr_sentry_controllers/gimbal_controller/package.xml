@@ -3,15 +3,20 @@
 <package format="3">
   <name>gimbal_controller</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>BIG YAW , SMALL YAW AND PITCH CONTROLLER </description>
   <maintainer email="2786573564@qq.com">b</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>generate_parameter_library</build_depend>
+  
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  
+  <depend>controller_interface</depend>
+  <depend>hardware_interface</depend>
 
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
-
+  
   <export>
     <build_type>ament_cmake</build_type>
   </export>
