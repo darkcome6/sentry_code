@@ -15,9 +15,15 @@
   
   <depend>controller_interface</depend>
   <depend>hardware_interface</depend>
-
+  <depend>pluginlib</depend>
   
+  <depend>realtime_tools</depend>
+  <depend>control_toolbox</depend>
+
+  <depend>spr_msgs</depend>
+
   <export>
     <build_type>ament_cmake</build_type>
+    <controller_interface plugin="${prefix}/gimbal_controller.xml"/>
   </export>
 </package>

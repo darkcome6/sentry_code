@@ -1,6 +1,10 @@
 #include "gimbal_controller/gimbal_controller.hpp"
-#include "gimbal_controller/gimbal_controller_parameter.hpp"
+#include "gimbal_controller_parameters.hpp"
 #include <control_toolbox/pid_ros.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <array>
 
 namespace spr_gimbal_controller
 {
@@ -16,7 +20,7 @@ using controller_interface::InterfaceConfiguration;
   SprGimbalController::on_init()
   {
     //创建参数监听器
-    param_listener_ = std::make_shared<ParamListener>(get_node());
+    param_listener_ = std::make_shared<gimbal_controller_parameters::ParamListener>(get_node());
     //获取参数
     params_ = param_listener_->get_params();
     /// @brief 初始化外部命令实时缓冲区，存储初始零值
@@ -158,9 +162,9 @@ using controller_interface::InterfaceConfiguration;
   //借出命令接口
   pitch_command_interface_ = std::make_unique<hardware_interface::LoanedCommandInterface>(
       std::move(command_interfaces_[0]));
-  small_yaw_state_interface_ = std::make_unique<hardware_interface::LoanedCommandInterface>(
+  small_yaw_command_interface_ = std::make_unique<hardware_interface::LoanedCommandInterface>(
       std::move(command_interfaces_[1]));
-  big_yaw_state_interface_ = std::make_unique<hardware_interface::LoanedCommandInterface>(
+  big_yaw_command_interface_ = std::make_unique<hardware_interface::LoanedCommandInterface>(
       std::move(command_interfaces_[2]));
 
   return controller_interface::CallbackReturn::SUCCESS;
@@ -198,22 +202,61 @@ using controller_interface::InterfaceConfiguration;
     {return;}
     params_ = param_listener_->get_params();
   }
-  /// @brief 扫描模式
-  std::array<double, 3> scan_mode()
+  /// @brief 扫描模式：时间驱动平滑扫描；一旦视觉给出有效目标，自动切到自瞄跟踪
+  std::array<double, 3> SprGimbalController::scan_mode()
   {
+    // 1) 目标协同：有有效视觉目标 → 直接转自瞄跟踪（扫↔跟切换）
+    if (target_valid_)
+    {
+      return aim_mode();
+    }
 
-  };
-  /// @brief 自瞄模式
-  std::array<double, 3> aim_mode()
+    // 2) 时间驱动三角波扫描（与 update 帧率无关，天然无跳变）
+    //    相比"每帧加固定步长"，用墙钟时间算扫描角，帧率抖动不影响轨迹
+    const double range_min = params_.pitch.scan_range[0];
+    const double range_max = params_.pitch.scan_range[1];
+    const double period = 4.0;  // 完整往返周期(s)，后续建议做成参数
+    const double t = get_node()->now().seconds();
+
+    // 三角波：一个周期内 0→1→0
+    const double tri = 2.0 * std::abs(std::fmod(t / period, 1.0) - 0.5);
+    const double target = range_min + (range_max - range_min) * tri;
+
+    // 3) 斜坡限速：目标位置一次最多变化 max_step，防位置环猛冲/过冲
+    //    scan_add 语义改为"每周期最大角增量"，配合 1000Hz 即最大扫描角速度
+    const double max_step = params_.pitch.scan_add;
+    scan_pos_ += std::clamp(target - scan_pos_, -max_step, max_step);
+
+    // 4) 软限位保护
+    scan_pos_ = std::clamp(scan_pos_, params_.pitch.min, params_.pitch.max);
+
+    // 返回 {pitch目标, small_yaw目标, big_yaw目标}（两个 yaw 一起扫）
+    return { pitch_pos_fb_, scan_pos_, scan_pos_ };
+  }
+
+  /// @brief 自瞄模式：读取视觉话题(外部状态)目标角度，并记录跟踪状态供扫描切换
+  std::array<double, 3> SprGimbalController::aim_mode()
   {
+    auto state = ex_state_rt_.readFromRT();
+    // 视觉目标（角度）——话题结构按你的约定：pitch/yaw 目标角 + 目标角速度
+    target_pitch_ = state->pitch_angle_ref;
+    target_yaw_ = state->small_yaw_angle_ref;
+    target_valid_ = true;
 
-  };
+    // TODO(速度前馈)：视觉给的目标角速度可在这里读出来，叠加到位置命令上，
+    // 用于补偿跟踪滞后（没有 IMU 时这是唯一的前馈来源）
+    // double target_yaw_vel = state->xxx;  // 需视觉话题提供角速度字段
+    // target_yaw_ += target_yaw_vel * /* 前馈增益 */;
 
-  /// @brief 遥控模式
-  std::array<double, 3> remote_control()
+    return { target_pitch_, target_yaw_, target_yaw_ };
+  }
+
+  /// @brief 遥控模式：直接采用遥控器下发的角度参考
+  std::array<double, 3> SprGimbalController::remote_control()
   {
-    
-  };
+    auto cmd = recv_cmd_ptr_.readFromRT();
+    return { cmd->pitch_angle_ref, cmd->small_yaw_angle_ref, cmd->big_yaw_angle_ref };
+  }
 
   SprGimbalController::~SprGimbalController(){};
 }//namespace spr_gimbal_controller

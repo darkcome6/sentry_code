@@ -1,0 +1,7 @@
+<library path="gimbal_controller">
+  <class name="spr_gimbal_controller/SprGimbalController"
+         type="spr_gimbal_controller::SprGimbalController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>The gimbal controller for sentry (pitch, small yaw, big yaw)</description>
+  </class>
+</library>

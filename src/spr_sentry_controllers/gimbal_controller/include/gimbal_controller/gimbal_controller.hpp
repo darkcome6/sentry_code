@@ -1,6 +1,5 @@
 #ifndef GIMBAL_CONTROLLER_HPP_
 #define GIMBAL_CONTROLLER_HPP_
-#include "gimbal_controller/gimbal_controller.hpp"
 #include "gimbal_controller_parameters.hpp"
 
 #include "rclcpp/rclcpp.hpp"
@@ -53,8 +52,8 @@ private:
   std::unique_ptr<hardware_interface::LoanedCommandInterface> big_yaw_command_interface_{ nullptr };
   std::unique_ptr<hardware_interface::LoanedCommandInterface> small_yaw_command_interface_{ nullptr };
   //控制器YAML文件编译文件
-  std::shared_ptr<ParamListener> param_listener_;
-  Params params_;
+  std::shared_ptr<gimbal_controller_parameters::ParamListener> param_listener_;
+  gimbal_controller_parameters::Params params_;
   //更新参数
   void update_parameters();
   //控制器模式
@@ -67,6 +66,13 @@ private:
   //临时存储
   double pitch_pos_cmd_{ 0.0 }, small_yaw_pos_cmd_{ 0.0 },big_yaw_pos_cmd_{ 0.0 };
   double pitch_pos_fb_{ 0.0 }, small_yaw_pos_fb_{ 0.0 },big_yaw_pos_fd_{ 0.0 };
+  //扫描与目标跟踪状态（上位机只管"平滑轨迹 + 扫↔跟切换"，预测/延迟补偿由电控与视觉负责）
+  enum class ScanState : uint8_t { SWEEP = 0, LOCK, TRACK, RECOVER };
+  ScanState scan_state_{ ScanState::SWEEP };
+  double scan_pos_{ 0.0 };       // 平滑后的扫描目标位置(yaw)
+  bool target_valid_{ false };   // 视觉目标是否有效（有有效目标则从扫描切到跟踪）
+  double target_pitch_{ 0.0 };   // 当前跟踪目标 pitch
+  double target_yaw_{ 0.0 };     // 当前跟踪目标 yaw
   //消息类型别名 命令格式 状态格式
   using CMD = spr_msgs::gimbal_cmd;
   using STATE = spr_msgs::gimbal_state;
