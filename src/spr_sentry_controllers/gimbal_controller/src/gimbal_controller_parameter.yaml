@@ -54,7 +54,7 @@ spr_gimbal_controller:
         default_value: 0.0,
         description: "Lower integral clamp."
       }
- yaw:
+ small_yaw:
     joint: {
       type: string,
       default_value: "",
@@ -72,6 +72,61 @@ spr_gimbal_controller:
       type: double,
       default_value: 0.0,
       description: "Minimum yaw angle"
+    }
+    scan_add: {
+      type: double,
+      default_value: 0.001,
+      description: "For sentry scan mode"
+    }
+    scan_range: {
+      type: double_array,
+      default_value: [0.0, 0.0],
+      description: "For sentry scan mode"
+    }
+    pid:
+      p: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain"
+      }
+      i: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain"
+      }
+      d: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain"
+      }
+      i_clamp_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_clamp_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+ big_yaw:
+    joint: {
+      type: string,
+      default_value: "",
+      description: "Joint names of the big yaw joints",
+      validation: {
+        not_empty<>: []
+      }
+    }
+    max: {
+      type: double,
+      default_value: 0.0,
+      description: "Maximum big yaw angle"
+    }
+    min: {
+      type: double,
+      default_value: 0.0,
+      description: "Minimum big yaw angle"
     }
     scan_add: {
       type: double,

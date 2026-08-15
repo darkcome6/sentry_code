@@ -1,4 +1,19 @@
+#ifndef GIMBAL_CONTROLLER_HPP_
+#define GIMBAL_CONTROLLER_HPP_
 #include "gimbal_controller/gimbal_controller.hpp"
+#include "gimbal_controller_parameters.hpp"
+
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp_lifecycle/state.hpp"
+
+#include <spr_msgs/gimbal_cmd.hpp>
+#include <spr_msgs/gimbal_state.hpp>
+
+#include <control_toolbox/pid_ros.hpp>
+#include "realtime_tools/realtime_buffer.hpp"
+#include "realtime_tools/realtime_box.hpp"
+#include "realtime_tools/realtime_publisher.hpp"
+
 namespace spr_gimbal_controller
 {
 class SprGimbalController : public controller_interface::ControllerInterface
@@ -43,8 +58,31 @@ private:
   //更新参数
   void update_parameters();
   //控制器模式
-  uint8_t mode_{ 0 };
+  uint8_t mode_{ 0 };//0 保持不动 1 扫描模式 2自瞄模式 3遥控模式
   uint8_t last_mode_{ 0 };
+  //
+  std::array<double, 3> scan_mode();
+  std::array<double, 3> aim_mode();
+  std::array<double, 3> remote_control();
+  //临时存储
+  double pitch_pos_cmd_{ 0.0 }, small_yaw_pos_cmd_{ 0.0 },big_yaw_pos_cmd_{ 0.0 };
+  double pitch_pos_fb_{ 0.0 }, small_yaw_pos_fb_{ 0.0 },big_yaw_pos_fd_{ 0.0 };
+  //消息类型别名 命令格式 状态格式
+  using CMD = spr_msgs::gimbal_cmd;
+  using STATE = spr_msgs::gimbal_state;
+  /// @brief /外部状态订阅器
+  rclcpp::Subscription<STATE>::SharedPtr ex_state_sub_ = nullptr;
+  /// @brief /外部状态实时缓冲区，存储最新的外部状态
+  realtime_tools::RealtimeBuffer<std::shared_ptr<STATE>> ex_state_rt_{ nullptr };
+  /// @brief /外部命令订阅器
+  rclcpp::Subscription<CMD>::SharedPtr cmd_sub_ = nullptr;
+  /// @brief /外部命令实时缓冲区，存储最新的外部命令
+  realtime_tools::RealtimeBuffer<std::shared_ptr<CMD>> recv_cmd_ptr_{ nullptr };
+  /// @brief  /外部状态发布器（内部封装有双缓冲区 并外加一层锁，防止上一条状态没发完，这条又覆盖上一条）
+  std::shared_ptr<realtime_tools::RealtimePublisher<STATE>> rt_gimbal_state_pub_{ nullptr };
+  /// @brief 控制器PID参数
+   std::shared_ptr<control_toolbox::PidROS> pid_pitch_pos_, pid_small_yaw_pos_,pid_big_yaw_pos_;
   
 }
 }//namespace spr_gimbal_controller
+#endif

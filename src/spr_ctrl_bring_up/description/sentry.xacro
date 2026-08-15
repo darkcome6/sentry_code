@@ -26,7 +26,7 @@ std::string motor_name;
         M2006,
         VIRTUAL_JOINT,
     } Motor_Type_e;-->
-        <joint name="bigyaw_joint">
+        <joint name="big_yaw_joint">
             <param name="motor_name" value="bigyaw_motor" />
             <param name="can_bus" value="can0" />
             <param name="tx_id" value="1" />

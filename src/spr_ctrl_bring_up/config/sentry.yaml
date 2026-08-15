@@ -4,4 +4,43 @@ controller_manager:
 
     joint_state_broadcaster:
       type: "joint_state_broadcaster/JointStateBroadcaster"
-    
+    gimbal_controller:
+      type: "spr_gimbal_controller/SprGimbalController"
+gimbal_controller:
+  ros_parameters:
+    pitch:
+      joint: "pitch_joint"
+      max: 0.5
+      min: -0.5
+      scan_add: 0.001
+      scan_range: [0.0, 0.0]
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_max: 1.0
+        i_clamp_min: -1.0
+    small_yaw:
+      joint: "small_yaw_joint"
+      max: 1.57
+      min: -1.57
+      scan_add: 0.001
+      scan_range: [0.0, 0.0]
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_max: 1.0
+        i_clamp_min: -1.0
+    big_yaw:
+      joint: "big_yaw_joint"
+      max: 1.57
+      min: -1.57
+      scan_add: 0.001
+      scan_range: [0.0, 0.0]
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_max: 1.0
+        i_clamp_min: -1.0
