@@ -130,13 +130,11 @@ using controller_interface::InterfaceConfiguration;
     case 1:
     {
       auto result =scan_mode();
-     
       break;
     }
     case 2:
     {
       auto result =aim_mode();
-
       break;
     }
     case 3:
