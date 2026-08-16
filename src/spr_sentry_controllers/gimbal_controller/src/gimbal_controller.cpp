@@ -48,8 +48,8 @@ using controller_interface::InterfaceConfiguration;
   {
     std::vector<std::string> joint_names;
     joint_names.push_back(params_.pitch.joint + "/position");
-    joint_names.push_back(params_.small_yaw.joint+"position");
-    joint_names.push_back(params_.big_yaw.joint+"position");
+    joint_names.push_back(params_.small_yaw.joint + "/position");
+    joint_names.push_back(params_.big_yaw.joint + "/position");
     //花括号构建初始化参数，INDIVIDUAL类型 
     return { interface_configuration_type::INDIVIDUAL, joint_names };
   };

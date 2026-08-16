@@ -3,9 +3,13 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="sentry">
     <xacro:include filename="$(find spr_sentry_description)/sentry.urdf.xacro" />
     <ros2_control name="SprHardwareInterface" type="system">
-        <hardware>
+        <!-- <hardware>
             <plugin>spr_hw_interface/SprHardwareInterface</plugin>
             <param name="can_device_count_" value="2" />
+         </hardware> -->
+        <hardware>
+            <plugin>mock_components/GenericSystem</plugin>
+            <param name="calculate_dynamics">true</param>
         </hardware>
 <!--
 std::string motor_name;

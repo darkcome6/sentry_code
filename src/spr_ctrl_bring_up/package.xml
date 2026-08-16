@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>spr_ctrl_bring_up</name>
+  <version>0.0.0</version>
+  <description>Bringup nodes and launch files for the sentry robot (simulation / hardware)</description>
+  <maintainer email="2786573564@qq.com">b</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>controller_manager</depend>
+  <depend>joint_state_broadcaster</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>xacro</depend>
+
+  <depend>spr_sentry_description</depend>
+  <depend>gimbal_controller</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
