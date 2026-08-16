@@ -25,7 +25,7 @@
 #include "visibility_control.hpp"
 #include "socket_can_id.hpp"
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 // Move SocketCanSender class definition here
 class SOCKETCAN_PUBLIC SocketCanSender

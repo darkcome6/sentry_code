@@ -23,7 +23,7 @@
 
 #include "visibility_control.hpp"
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 constexpr std::size_t MAX_DATA_LENGTH = 8U;
 constexpr std::size_t MAX_FD_DATA_LENGTH = 64U;

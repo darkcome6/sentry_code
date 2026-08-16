@@ -1,5 +1,5 @@
 #include "gimbal_controller/gimbal_controller.hpp"
-#include "gimbal_controller_parameters.hpp"
+#include <gimbal_controller/gimbal_controller_parameters.hpp>
 #include <control_toolbox/pid_ros.hpp>
 
 #include <algorithm>
@@ -20,7 +20,7 @@ using controller_interface::InterfaceConfiguration;
   SprGimbalController::on_init()
   {
     //创建参数监听器
-    param_listener_ = std::make_shared<gimbal_controller_parameters::ParamListener>(get_node());
+    param_listener_ = std::make_shared<spr_gimbal_controller::ParamListener>(get_node());
     //获取参数
     params_ = param_listener_->get_params();
     /// @brief 初始化外部命令实时缓冲区，存储初始零值
@@ -29,7 +29,7 @@ using controller_interface::InterfaceConfiguration;
     cmd->pitch_angle_ref = 0.0;
     cmd->small_yaw_angle_ref = 0.0;
     cmd->big_yaw_angle_ref = 0.0;
-    recv_cmd_ptr_.init(cmd);
+    recv_cmd_ptr_.initRT(cmd);
     /// @brief 初始化外部状态实时缓冲区，存储初始零值
     auto state =std::make_shared<STATE>();
     state->mode = 0;
@@ -39,12 +39,12 @@ using controller_interface::InterfaceConfiguration;
     state->pitch_current_ref = 0.0;
     state->small_yaw_current_ref = 0.0;
     state->big_yaw_current_ref = 0.0;
-    ex_state_rt_.init(state);
+    ex_state_rt_.initRT(state);
     return controller_interface::CallbackReturn::SUCCESS;
 };
 
   controller_interface::InterfaceConfiguration 
-  SprGimbalController::command_interface_configuration()
+  SprGimbalController::command_interface_configuration() const
   {
     std::vector<std::string> joint_names;
     joint_names.push_back(params_.pitch.joint + "/position");
@@ -55,7 +55,7 @@ using controller_interface::InterfaceConfiguration;
   };
 
   controller_interface::InterfaceConfiguration 
-  SprGimbalController::state_interface_configuration()
+  SprGimbalController::state_interface_configuration() const
   {
     std::vector<std::string> joint_names;
     joint_names.push_back(params_.pitch.joint + "/position");
@@ -123,8 +123,9 @@ using controller_interface::InterfaceConfiguration;
   {
     case 0:
     {
-      pitch_cmd = cmd->pitch_ref;
-      yaw_cmd = cmd->yaw_ref;
+      pitch_cmd = cmd->pitch_angle_ref;
+      small_yaw_cmd = cmd->small_yaw_angle_ref;
+      big_yaw_cmd = cmd->big_yaw_angle_ref;
       break;
     }
     case 1:
@@ -235,7 +236,7 @@ using controller_interface::InterfaceConfiguration;
   /// @brief 自瞄模式：读取视觉话题(外部状态)目标角度，并记录跟踪状态供扫描切换
   std::array<double, 3> SprGimbalController::aim_mode()
   {
-    auto state = ex_state_rt_.readFromRT();
+    auto state = *ex_state_rt_.readFromRT();
     // 视觉目标（角度）——话题结构按你的约定：pitch/yaw 目标角 + 目标角速度
     target_pitch_ = state->pitch_angle_ref;
     target_yaw_ = state->small_yaw_angle_ref;
@@ -252,7 +253,7 @@ using controller_interface::InterfaceConfiguration;
   /// @brief 遥控模式：直接采用遥控器下发的角度参考
   std::array<double, 3> SprGimbalController::remote_control()
   {
-    auto cmd = recv_cmd_ptr_.readFromRT();
+    auto cmd = *recv_cmd_ptr_.readFromRT();
     return { cmd->pitch_angle_ref, cmd->small_yaw_angle_ref, cmd->big_yaw_angle_ref };
   }
 

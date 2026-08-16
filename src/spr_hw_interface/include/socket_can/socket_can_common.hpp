@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 /// Bind a non-blocking CAN_RAW socket to the given interface
 /// \param[in] interface The name of the interface to bind, must be smaller than IFNAMSIZ

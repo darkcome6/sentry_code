@@ -1,12 +1,13 @@
 #ifndef GIMBAL_CONTROLLER_HPP_
 #define GIMBAL_CONTROLLER_HPP_
-#include "gimbal_controller_parameters.hpp"
+#include <gimbal_controller/gimbal_controller_parameters.hpp>
 
+#include "controller_interface/controller_interface.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
-#include <spr_msgs/gimbal_cmd.hpp>
-#include <spr_msgs/gimbal_state.hpp>
+#include <spr_msgs/msg/gimbal_cmd.hpp>
+#include <spr_msgs/msg/gimbal_state.hpp>
 
 #include <control_toolbox/pid_ros.hpp>
 #include "realtime_tools/realtime_buffer.hpp"
@@ -20,13 +21,13 @@ class SprGimbalController : public controller_interface::ControllerInterface
 public:
   SprGimbalController();
   ~SprGimbalController();
-  controller_interface::CallbackReturn SprGimbalController::on_init() override;
+  controller_interface::CallbackReturn on_init() override;
 
-  controller_interface::return_type SprGimbalController::update(const rclcpp::Time& time,const rclcpp::Duration& period) override;
- 
-  controller_interface::InterfaceConfiguration SprGimbalController::command_interface_configuration() const override;
+  controller_interface::return_type update(const rclcpp::Time& time,const rclcpp::Duration& period) override;
 
-  controller_interface::InterfaceConfiguration SprGimbalController::state_interface_configuration() const override;
+  controller_interface::InterfaceConfiguration command_interface_configuration() const override;
+
+  controller_interface::InterfaceConfiguration state_interface_configuration() const override;
 
   controller_interface::CallbackReturn
   on_configure(const rclcpp_lifecycle::State& previous_state) override;
@@ -52,8 +53,8 @@ private:
   std::unique_ptr<hardware_interface::LoanedCommandInterface> big_yaw_command_interface_{ nullptr };
   std::unique_ptr<hardware_interface::LoanedCommandInterface> small_yaw_command_interface_{ nullptr };
   //控制器YAML文件编译文件
-  std::shared_ptr<gimbal_controller_parameters::ParamListener> param_listener_;
-  gimbal_controller_parameters::Params params_;
+  std::shared_ptr<spr_gimbal_controller::ParamListener> param_listener_;
+  spr_gimbal_controller::Params params_;
   //更新参数
   void update_parameters();
   //控制器模式
@@ -74,8 +75,8 @@ private:
   double target_pitch_{ 0.0 };   // 当前跟踪目标 pitch
   double target_yaw_{ 0.0 };     // 当前跟踪目标 yaw
   //消息类型别名 命令格式 状态格式
-  using CMD = spr_msgs::gimbal_cmd;
-  using STATE = spr_msgs::gimbal_state;
+  using CMD = spr_msgs::msg::GimbalCmd;
+  using STATE = spr_msgs::msg::GimbalState;
   /// @brief /外部状态订阅器
   rclcpp::Subscription<STATE>::SharedPtr ex_state_sub_ = nullptr;
   /// @brief /外部状态实时缓冲区，存储最新的外部状态
@@ -89,6 +90,6 @@ private:
   /// @brief 控制器PID参数
    std::shared_ptr<control_toolbox::PidROS> pid_pitch_pos_, pid_small_yaw_pos_,pid_big_yaw_pos_;
   
-}
+};
 }//namespace spr_gimbal_controller
 #endif

@@ -29,7 +29,7 @@
 #include "visibility_control.hpp"
 #include "socket_can_id.hpp"
 
-namespace tide_hw_interface
+namespace spr_hw_interface
 {
 /// Simple RAII wrapper around a raw CAN receiver
 class SOCKETCAN_PUBLIC SocketCanReceiver

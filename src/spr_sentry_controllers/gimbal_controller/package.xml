@@ -7,20 +7,16 @@
   <maintainer email="2786573564@qq.com">b</maintainer>
   <license>TODO: License declaration</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <build_depend>generate_parameter_library</build_depend>
-  
+  <buildtool_depend>ament_cmake_auto</buildtool_depend>
+
+  <depend>generate_parameter_library</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
-  
   <depend>controller_interface</depend>
-  <depend>hardware_interface</depend>
-  <depend>pluginlib</depend>
-  
-  <depend>realtime_tools</depend>
   <depend>control_toolbox</depend>
-
+  <depend>realtime_tools</depend>
   <depend>spr_msgs</depend>
+  <depend>pluginlib</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

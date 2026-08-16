@@ -5,8 +5,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()   # ① 自动找依赖
+
+# generate_parameter_library：根据 YAML 生成参数库
+find_package(generate_parameter_library REQUIRED)
 
 #根据YAML文件创建参数文件 gimbal_controller_parameter.hpp
 #gimbal_controller_parameter.cpp
