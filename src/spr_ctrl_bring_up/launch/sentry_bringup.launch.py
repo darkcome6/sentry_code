@@ -2,8 +2,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -27,16 +27,18 @@ def generate_launch_description():
     )
 
     # 生成关节状态（/joint_states），供 robot_state_publisher 使用
-    spawn_joint_state_broadcaster = ExecuteProcess(
-        cmd=[FindExecutable(name='spawner'), 'joint_state_broadcaster',
-             '--controller-manager', '/controller_manager'],
+    spawn_joint_state_broadcaster = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['joint_state_broadcaster', '--controller-manager', '/controller_manager'],
         output='screen',
     )
 
     # 加载并激活云台控制器
-    spawn_gimbal_controller = ExecuteProcess(
-        cmd=[FindExecutable(name='spawner'), 'gimbal_controller',
-             '--controller-manager', '/controller_manager'],
+    spawn_gimbal_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['gimbal_controller', '--controller-manager', '/controller_manager'],
         output='screen',
     )
 

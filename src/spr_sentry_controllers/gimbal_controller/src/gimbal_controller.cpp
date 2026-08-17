@@ -70,13 +70,17 @@ using controller_interface::InterfaceConfiguration;
   controller_interface::CallbackReturn
   SprGimbalController::on_configure(const rclcpp_lifecycle::State& previous_state)
   {
+    (void)previous_state;
     params_ = param_listener_->get_params();
     /// @brief 初始化三个关节的PID参数
     pid_pitch_pos_ = std::make_shared<control_toolbox::PidROS>(get_node(), "pitch.pid", true);
     pid_small_yaw_pos_ = std::make_shared<control_toolbox::PidROS>(get_node(), "small_yaw.pid", true);
     pid_big_yaw_pos_ =std::make_shared<control_toolbox::PidROS>(get_node(),"big_yaw.pid",true);
     //校验是否成功
-    if (!pid_pitch_pos_->initPid() || !pid_small_yaw_pos_->initPid()||pid_big_yaw_pos_->initPid())
+    bool ok_pitch = pid_pitch_pos_->initPid();
+    bool ok_small = pid_small_yaw_pos_->initPid();
+    bool ok_big = pid_big_yaw_pos_->initPid();
+    if (!ok_pitch || !ok_small || !ok_big)
     {
        RCLCPP_ERROR(get_node()->get_logger(), "Failed to config the params of PIDs.");
        return controller_interface::CallbackReturn::ERROR;
@@ -101,14 +105,14 @@ using controller_interface::InterfaceConfiguration;
   controller_interface::return_type 
   SprGimbalController::update(const rclcpp::Time& time,const rclcpp::Duration& period)
   {
+  (void)time;
+  (void)period;
   //更新参数，报文，读取数据,模式
   update_parameters();
-  auto logger = get_node()->get_logger();
   auto cmd = *recv_cmd_ptr_.readFromRT();
   last_mode_ =mode_;
   mode_ =cmd->mode;
   double pitch_fb = 0.0, small_yaw_fb = 0.0,big_yaw_fb=0.0;
-  double pitch_cmd = 0.0, small_yaw_cmd = 0.0,big_yaw_cmd=0.0;
 
   pitch_fb = pitch_state_interface_->get_value();
   small_yaw_fb =small_yaw_state_interface_->get_value();
@@ -123,34 +127,34 @@ using controller_interface::InterfaceConfiguration;
   {
     case 0:
     {
-      pitch_cmd = cmd->pitch_angle_ref;
-      small_yaw_cmd = cmd->small_yaw_angle_ref;
-      big_yaw_cmd = cmd->big_yaw_angle_ref;
+      // 保持不动模式
       break;
     }
     case 1:
     {
-      auto result =scan_mode();
+      (void)scan_mode();
       break;
     }
     case 2:
     {
-      auto result =aim_mode();
+      (void)aim_mode();
       break;
     }
     case 3:
     {
-      auto result =remote_control();
+      (void)remote_control();
       break;
     }
     default:
       break;
   }
+  return controller_interface::return_type::OK;
 };
 
   controller_interface::CallbackReturn
   SprGimbalController::on_activate(const rclcpp_lifecycle::State& previous_state)
   {
+  (void)previous_state;
   //借出状态接口接口
   pitch_state_interface_ = std::make_unique<const hardware_interface::LoanedStateInterface>(
       std::move(state_interfaces_[0]));
@@ -172,6 +176,7 @@ using controller_interface::InterfaceConfiguration;
   controller_interface::CallbackReturn
   SprGimbalController::on_deactivate(const rclcpp_lifecycle::State& previous_state)
   {
+  (void)previous_state;
   //重置状态接口
   pitch_state_interface_.reset();
   big_yaw_state_interface_.reset();
@@ -186,12 +191,14 @@ using controller_interface::InterfaceConfiguration;
   controller_interface::CallbackReturn
   SprGimbalController::on_cleanup(const rclcpp_lifecycle::State& previous_state)
   {
+    (void)previous_state;
     return controller_interface::CallbackReturn::SUCCESS;
   };
 
   controller_interface::CallbackReturn
   SprGimbalController::on_error(const rclcpp_lifecycle::State& previous_state)
   {
+    (void)previous_state;
     return controller_interface::CallbackReturn::SUCCESS;
   };
   //更新参数

@@ -7,8 +7,8 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 
-# 安装 launch 与 config 目录到 share 目录
-install(DIRECTORY launch config
+# 安装 launch、config、description 目录到 share 目录
+install(DIRECTORY launch config description
   DESTINATION share/${PROJECT_NAME}
 )
 

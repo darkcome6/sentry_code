@@ -7,7 +7,7 @@ controller_manager:
     gimbal_controller:
       type: "spr_gimbal_controller/SprGimbalController"
 gimbal_controller:
-  ros_parameters:
+  ros__parameters:
     pitch:
       joint: "pitch_joint"
       max: 0.5
@@ -18,8 +18,10 @@ gimbal_controller:
         p: 1.0
         i: 0.0
         d: 0.1
-        i_clamp_max: 1.0
+        i_min: -1.0
+        i_max: 1.0
         i_clamp_min: -1.0
+        i_clamp_max: 1.0
     small_yaw:
       joint: "small_yaw_joint"
       max: 1.57
@@ -30,8 +32,10 @@ gimbal_controller:
         p: 1.0
         i: 0.0
         d: 0.1
-        i_clamp_max: 1.0
+        i_min: -1.0
+        i_max: 1.0
         i_clamp_min: -1.0
+        i_clamp_max: 1.0
     big_yaw:
       joint: "big_yaw_joint"
       max: 1.57
@@ -42,5 +46,7 @@ gimbal_controller:
         p: 1.0
         i: 0.0
         d: 0.1
-        i_clamp_max: 1.0
+        i_min: -1.0
+        i_max: 1.0
         i_clamp_min: -1.0
+        i_clamp_max: 1.0
