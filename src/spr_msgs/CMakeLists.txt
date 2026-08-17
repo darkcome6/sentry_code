@@ -10,8 +10,8 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "GimbalCmd.msg"
-  "GimbalState.msg"
+  "msg/GimbalCmd.msg"
+  "msg/GimbalState.msg"
   DEPENDENCIES std_msgs
 )
 

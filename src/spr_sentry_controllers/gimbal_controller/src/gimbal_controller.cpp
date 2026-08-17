@@ -23,19 +23,22 @@ using controller_interface::InterfaceConfiguration;
     param_listener_ = std::make_shared<spr_gimbal_controller::ParamListener>(get_node());
     //获取参数
     params_ = param_listener_->get_params();
+    
     /// @brief 初始化外部命令实时缓冲区，存储初始零值
     auto cmd= std::make_shared<CMD>();
     cmd->mode = 0;
-    cmd->pitch_angle_ref = 0.0;
-    cmd->small_yaw_angle_ref = 0.0;
-    cmd->big_yaw_angle_ref = 0.0;
+    cmd->pitch_angle = 0.0;
+    cmd->small_yaw_angle = 0.0;
+    cmd->big_yaw_angle = 0.0;
     recv_cmd_ptr_.initRT(cmd);
     /// @brief 初始化外部状态实时缓冲区，存储初始零值
     auto state =std::make_shared<STATE>();
     state->mode = 0;
+    
     state->pitch_angle_ref = 0.0;
     state->small_yaw_angle_ref = 0.0;
     state->big_yaw_angle_ref = 0.0;
+
     state->pitch_current_ref = 0.0;
     state->small_yaw_current_ref = 0.0;
     state->big_yaw_current_ref = 0.0;
@@ -261,7 +264,7 @@ using controller_interface::InterfaceConfiguration;
   std::array<double, 3> SprGimbalController::remote_control()
   {
     auto cmd = *recv_cmd_ptr_.readFromRT();
-    return { cmd->pitch_angle_ref, cmd->small_yaw_angle_ref, cmd->big_yaw_angle_ref };
+    return { cmd->pitch_angle, cmd->small_yaw_angle, cmd->big_yaw_angle};
   }
 
   SprGimbalController::~SprGimbalController(){};
