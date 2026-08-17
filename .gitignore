@@ -12,3 +12,5 @@ log/
 *.a
 *.pyc
 __pycache__/
+# Build generated compile commands
+compile_commands.json
