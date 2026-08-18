@@ -181,17 +181,29 @@ void ChassisController::update_parameters()
   params_ = param_listener_->get_params();
 }
 
-// TODO(实现): 麦克纳姆轮逆运动学，当前返回零速度占位
+// 麦克纳姆轮逆运动学：底盘速度(vx,vy,wz) -> 四轮目标轮速(rad/s)
+// 约定：x 向前、y 向左、wz 逆时针为正（对应 cmd_vel 的 linear.x/linear.y/angular.z）
+//   v_LF = (vx - vy - (L+W)/2 * wz) / R
+//   v_RF = (vx + vy + (L+W)/2 * wz) / R
+//   v_LB = (vx - vy + (L+W)/2 * wz) / R
+//   v_RB = (vx + vy - (L+W)/2 * wz) / R
 std::array<double, 4> ChassisController::inverse_kinematics(double vx, double vy, double wz)
 {
-  (void)vx; (void)vy; (void)wz;
-  // 参数: wheel_base(轴距), track_width(轮距), wheel_radius(轮半径)
-  // 公式示例:
-  //   v_LF = (vx - vy - (wheel_base+track_width)/2 * wz) / wheel_radius
-  //   v_RF = (vx + vy + (wheel_base+track_width)/2 * wz) / wheel_radius
-  //   v_LB = (vx + vy - (wheel_base+track_width)/2 * wz) / wheel_radius
-  //   v_RB = (vx - vy + (wheel_base+track_width)/2 * wz) / wheel_radius
-  return { 0.0, 0.0, 0.0, 0.0 };
+  const double L = params_.wheel_base;     // 轴距 (m)
+  const double W = params_.track_width;    // 轮距 (m)
+  const double R = params_.wheel_radius;   // 轮半径 (m)
+  if (R <= 0.0)
+  {
+    RCLCPP_WARN(get_node()->get_logger(), "wheel_radius must be > 0, got %.4f", R);
+    return { 0.0, 0.0, 0.0, 0.0 };
+  }
+  const double half = (L + W) / 2.0;
+  return {
+    ( vx - vy - half * wz) / R,   // 左前轮
+    ( vx + vy + half * wz) / R,   // 右前轮
+    ( vx - vy + half * wz) / R,   // 左后轮
+    ( vx + vy - half * wz) / R,   // 右后轮
+  };
 }
 
 // 速度环 PID：轮速误差经 PID 得到电流(原始值)，限幅后返回
