@@ -1,0 +1,197 @@
+spr_chassis_controller:
+  # 麦克纳姆轮底盘几何（逆运动学用，单位 m）
+  wheel_base: {
+    type: double,
+    default_value: 0.3,
+    description: "前后轴距 (m)"
+  }
+  track_width: {
+    type: double,
+    default_value: 0.4,
+    description: "左右轮距 (m)"
+  }
+  wheel_radius: {
+    type: double,
+    default_value: 0.076,
+    description: "轮半径 (m)"
+  }
+  left_wheel_front:
+    joint: {
+      type: string,
+      default_value: "",
+      description: "Joint name of left_wheel_front",
+      validation: {
+        not_empty<>: []
+      }
+    }
+    pid:
+      p: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain"
+      }
+      i: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain"
+      }
+      d: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain"
+      }
+      i_clamp_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_clamp_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of velocity PID output (current raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of velocity PID output (current raw value)"
+      }
+  right_wheel_front:
+    joint: {
+      type: string,
+      default_value: "",
+      description: "Joint name of right_wheel_front",
+      validation: {
+        not_empty<>: []
+      }
+    }
+    pid:
+      p: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain"
+      }
+      i: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain"
+      }
+      d: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain"
+      }
+      i_clamp_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_clamp_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of velocity PID output (current raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of velocity PID output (current raw value)"
+      }
+  left_wheel_back:
+    joint: {
+      type: string,
+      default_value: "",
+      description: "Joint name of left_wheel_back",
+      validation: {
+        not_empty<>: []
+      }
+    }
+    pid:
+      p: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain"
+      }
+      i: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain"
+      }
+      d: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain"
+      }
+      i_clamp_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_clamp_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of velocity PID output (current raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of velocity PID output (current raw value)"
+      }
+  right_wheel_back:
+    joint: {
+      type: string,
+      default_value: "",
+      description: "Joint name of right_wheel_back",
+      validation: {
+        not_empty<>: []
+      }
+    }
+    pid:
+      p: {
+        type: double,
+        default_value: 0.0,
+        description: "Proportional gain"
+      }
+      i: {
+        type: double,
+        default_value: 0.0,
+        description: "Integral gain"
+      }
+      d: {
+        type: double,
+        default_value: 0.0,
+        description: "Derivative gain"
+      }
+      i_clamp_max: {
+        type: double,
+        default_value: 0.0,
+        description: "Upper integral clamp."
+      }
+      i_clamp_min: {
+        type: double,
+        default_value: 0.0,
+        description: "Lower integral clamp."
+      }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of velocity PID output (current raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of velocity PID output (current raw value)"
+      }
