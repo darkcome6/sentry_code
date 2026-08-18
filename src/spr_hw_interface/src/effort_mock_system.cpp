@@ -1,6 +1,7 @@
 #include "spr_hw_interface/effort_mock_system.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -16,9 +17,10 @@ hardware_interface::CallbackReturn EffortMockSystem::on_init(
   }
 
   const size_t n = info_.joints.size();
-  cmd_positions_.assign(n, 0.0);
-  cmd_velocities_.assign(n, 0.0);
-  cmd_efforts_.assign(n, 0.0);
+  // 命令接口初始置 NaN（未写入标记），由 read() 按实际写入的接口选择驱动方式
+  cmd_positions_.assign(n, std::numeric_limits<double>::quiet_NaN());
+  cmd_velocities_.assign(n, std::numeric_limits<double>::quiet_NaN());
+  cmd_efforts_.assign(n, std::numeric_limits<double>::quiet_NaN());
   state_positions_.assign(n, 0.0);
   state_velocities_.assign(n, 0.0);
   state_efforts_.assign(n, 0.0);
@@ -41,6 +43,20 @@ hardware_interface::CallbackReturn EffortMockSystem::on_init(
   RCLCPP_INFO(rclcpp::get_logger("EffortMockSystem"),
     "EffortMockSystem initialized with %ld joints, accel_per_effort=%.3f",
     n, accel_per_effort_);
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn EffortMockSystem::on_configure(
+  const rclcpp_lifecycle::State & previous_state)
+{
+  (void)previous_state;
+  // 命令接口重置为 NaN（未写入），状态清零
+  for (auto & v : cmd_positions_) { v = std::numeric_limits<double>::quiet_NaN(); }
+  for (auto & v : cmd_velocities_) { v = std::numeric_limits<double>::quiet_NaN(); }
+  for (auto & v : cmd_efforts_) { v = std::numeric_limits<double>::quiet_NaN(); }
+  std::fill(state_positions_.begin(), state_positions_.end(), 0.0);
+  std::fill(state_velocities_.begin(), state_velocities_.end(), 0.0);
+  std::fill(state_efforts_.begin(), state_efforts_.end(), 0.0);
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -106,12 +122,30 @@ hardware_interface::return_type EffortMockSystem::read(
   }
   for (size_t i = 0; i < info_.joints.size(); i++)
   {
-    // 理想电流/力矩环：反馈力矩 = 命令力矩
-    state_efforts_[i] = cmd_efforts_[i];
-    // 简单惯性 + 阻尼模型
-    state_velocities_[i] = state_velocities_[i] * damping_
-      + accel_per_effort_ * cmd_efforts_[i] * dt;
-    state_positions_[i] += state_velocities_[i] * dt;
+    // 按实际被写入的命令接口选择驱动方式（优先级 position > velocity > effort）
+    if (!std::isnan(cmd_positions_[i]))
+    {
+      // 位置模式：一阶低通跟随命令，模拟位置环动态
+      const double prev = state_positions_[i];
+      state_positions_[i] += (cmd_positions_[i] - state_positions_[i]) * position_gain_;
+      state_velocities_[i] = (state_positions_[i] - prev) / dt;
+      state_efforts_[i] = 0.0;
+    }
+    else if (!std::isnan(cmd_velocities_[i]))
+    {
+      // 速度模式：速度直接跟随命令，位置积分
+      state_velocities_[i] = cmd_velocities_[i];
+      state_positions_[i] += state_velocities_[i] * dt;
+      state_efforts_[i] = 0.0;
+    }
+    else if (!std::isnan(cmd_efforts_[i]))
+    {
+      // 力矩模式：effort 驱动（理想电流/力矩环 + 简单惯性与阻尼）
+      state_efforts_[i] = cmd_efforts_[i];
+      state_velocities_[i] = state_velocities_[i] * damping_
+        + accel_per_effort_ * cmd_efforts_[i] * dt;
+      state_positions_[i] += state_velocities_[i] * dt;
+    }
   }
   return hardware_interface::return_type::OK;
 }
