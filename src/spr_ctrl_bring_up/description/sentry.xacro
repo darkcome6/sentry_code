@@ -31,7 +31,7 @@ std::string motor_name;
         M2006,
         VIRTUAL_JOINT,
     } Motor_Type_e;-->
-        <joint name="big_yaw_joint">
+        <joint name="bigyaw_joint">
             <param name="motor_name">bigyaw_motor</param>
             <param name="can_bus">can0</param>
             <param name="tx_id">1</param>
@@ -81,7 +81,8 @@ std::string motor_name;
             <param name="tx_id">1</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="velocity" />
+            <command_interface name="effort" />
+            <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
         <joint name="right_wheel_front_joint">
@@ -90,7 +91,8 @@ std::string motor_name;
             <param name="tx_id">2</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="velocity" />
+            <command_interface name="effort" />
+            <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
         <joint name="left_wheel_back_joint">
@@ -99,7 +101,8 @@ std::string motor_name;
             <param name="tx_id">3</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="velocity" />
+            <command_interface name="effort" />
+            <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
         <joint name="right_wheel_back_joint">
@@ -108,7 +111,8 @@ std::string motor_name;
             <param name="tx_id">4</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="velocity" />
+            <command_interface name="effort" />
+            <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
     </ros2_control>

@@ -42,6 +42,18 @@ def generate_launch_description():
         output='screen',
     )
 
+    # 加载并激活底盘控制器
+    spawn_chassis_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['chassis_controller', '--controller-manager', '/controller_manager'],
+        output='screen',
+    )
+
+    # RViz 手动启动（避免与控制器竞争资源）:
+    #   source install/setup.bash
+    #   rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rviz/sentry.rviz
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
@@ -58,4 +70,5 @@ def generate_launch_description():
         controller_manager,
         spawn_joint_state_broadcaster,
         spawn_gimbal_controller,
+        spawn_chassis_controller,
     ])

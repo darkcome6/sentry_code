@@ -104,7 +104,7 @@ sentry_code/
 ### 4.3 spr_sentry_controllers / gimbal_controller —— 云台控制器
 
 - 控制器类型：`spr_gimbal_controller/SprGimbalController`
-- 控制轴：`pitch_joint`、`small_yaw_joint`、`big_yaw_joint`（串级 PID，位置环用 `control_toolbox::PidROS`）
+- 控制轴：`pitch_joint`、`small_yaw_joint`、`bigyaw_joint`（串级 PID，位置环用 `control_toolbox::PidROS`）
 - 命令接口：`<joint>/effort`（串级 PID 输出电流/力矩参考原始值，经 `output_min/max` 限幅）
 - 状态接口：`<joint>/position`（读位置反馈，供位置环闭环）
 

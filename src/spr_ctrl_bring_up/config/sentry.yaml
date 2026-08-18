@@ -1,11 +1,13 @@
 controller_manager:
   ros__parameters:
-    update_rate: 1000  # Hz
+    update_rate: 500  # Hz（虚拟机调试建议 500；真机可恢复 1000）
 
     joint_state_broadcaster:
       type: "joint_state_broadcaster/JointStateBroadcaster"
     gimbal_controller:
       type: "spr_gimbal_controller/SprGimbalController"
+    chassis_controller:
+      type: "spr_chassis_controller/ChassisController"
 gimbal_controller:
   ros__parameters:
     pitch:
@@ -43,7 +45,7 @@ gimbal_controller:
         output_min: -30000.0
         output_max: 30000.0
     big_yaw:
-      joint: "big_yaw_joint"
+      joint: "bigyaw_joint"
       max: 1.57
       min: -1.57
       scan_add: 0.001
@@ -57,5 +59,51 @@ gimbal_controller:
         i_clamp_min: -1.0
         i_clamp_max: 1.0
         # 位置环输出限幅（力矩原始值，DM6006 按实际力矩范围调小）
+        output_min: -30000.0
+        output_max: 30000.0
+chassis_controller:
+  ros__parameters:
+    # 麦克纳姆轮底盘几何（逆运动学用，单位 m）
+    wheel_base: 0.3
+    track_width: 0.4
+    wheel_radius: 0.076
+    left_wheel_front:
+      joint: "left_wheel_front_joint"
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_min: -1.0
+        i_clamp_max: 1.0
+        output_min: -30000.0
+        output_max: 30000.0
+    right_wheel_front:
+      joint: "right_wheel_front_joint"
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_min: -1.0
+        i_clamp_max: 1.0
+        output_min: -30000.0
+        output_max: 30000.0
+    left_wheel_back:
+      joint: "left_wheel_back_joint"
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_min: -1.0
+        i_clamp_max: 1.0
+        output_min: -30000.0
+        output_max: 30000.0
+    right_wheel_back:
+      joint: "right_wheel_back_joint"
+      pid:
+        p: 1.0
+        i: 0.0
+        d: 0.1
+        i_clamp_min: -1.0
+        i_clamp_max: 1.0
         output_min: -30000.0
         output_max: 30000.0
