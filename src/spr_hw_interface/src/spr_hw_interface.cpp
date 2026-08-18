@@ -3,6 +3,8 @@
 
 #include <limits>//std::numeric_limits
 #include <string>
+#include <array>
+#include <cstring>
 
 #include <rclcpp/clock.hpp>   // rclcpp::Clock
 #include <rclcpp/time.hpp>    // rclcpp::Time
@@ -128,6 +130,7 @@ struct InterfaceInfo
 
   cmd_positions_.resize(joint_count, std::numeric_limits<double>::quiet_NaN());
   cmd_velocities_.resize(joint_count, std::numeric_limits<double>::quiet_NaN());
+  cmd_efforts_.resize(joint_count, std::numeric_limits<double>::quiet_NaN());
   // 解析 info_ 中的关节信息，初始化电机配置
   for (const auto& joint : info_.joints)
   {
@@ -160,6 +163,14 @@ struct InterfaceInfo
         {
           config.motor_type = GM6020;
         }
+        else if (value == "DM6006")
+        {
+          config.motor_type = DM6006;
+        }
+        else if (value == "DM4310")
+        {
+          config.motor_type = DM4310;
+        }
         else if (value == "VIRTUAL_JOINT")
         {
           config.motor_type = VIRTUAL_JOINT;
@@ -172,6 +183,12 @@ struct InterfaceInfo
       }
       else if (key == "offset")
         config.offset = std::stoi(value);
+      else if (key == "pos_max")
+        config.pos_max = std::stof(value);
+      else if (key == "vel_max")
+        config.vel_max = std::stof(value);
+      else if (key == "tor_max")
+        config.tor_max = std::stof(value);
     }
     // 创建电机对象，配置 CAN，存入 motors_ 数组（顺序对应 info_.joints）
     auto motor = std::make_shared<DJI_Motor>(config);
@@ -221,6 +238,7 @@ SprHardwareInterface::on_configure(const rclcpp_lifecycle::State& previous_state
   std::fill(state_temperatures_.begin(), state_temperatures_.end(), 0.0);
   std::fill(cmd_positions_.begin(), cmd_positions_.end(), 0.0);
   std::fill(cmd_velocities_.begin(), cmd_velocities_.end(), 0.0);
+  std::fill(cmd_efforts_.begin(), cmd_efforts_.end(), 0.0);
   return hardware_interface::CallbackReturn::SUCCESS;
 };
 
@@ -228,6 +246,23 @@ hardware_interface::CallbackReturn
 SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
    (void)previous_state;
+   // 达妙电机 MIT 模式上电默认失能，激活时发送使能帧
+   // TODO(真机确认): 使能字节按达妙调试助手/固件版本核对
+   const std::array<uint8_t, 8> dm_enable{ 0xFC, 0xFD, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+   for (const auto& motor : motors_)
+   {
+     if (motor->config_.motor_type == DM6006 || motor->config_.motor_type == DM4310)
+     {
+       for (auto can_device : can_devices_)
+       {
+         if (motor->config_.can_bus == can_device->interface)
+         {
+           sendCanFrame(can_device, dm_enable.data(), dm_enable.size(), motor->config_.tx_id);
+           break;
+         }
+       }
+     }
+   }
    return hardware_interface::CallbackReturn::SUCCESS;   
 };
 hardware_interface::CallbackReturn 
@@ -310,6 +345,10 @@ SprHardwareInterface::export_command_interfaces()
       {
         interfaces.emplace_back(info_.joints[i].name, command_interface.name, &cmd_velocities_[i]);
       }
+      else if (command_interface.name == "effort")
+      {
+        interfaces.emplace_back(info_.joints[i].name, command_interface.name, &cmd_efforts_[i]);
+      }
     }
   }
   return interfaces;
@@ -323,6 +362,16 @@ SprHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& per
   for (size_t i = 0; i < joint_count; i++){
       auto& motor = motors_[i];  
       motor->check_connection(current_time);
+      if (motor->config_.motor_type == DM6006 || motor->config_.motor_type == DM4310)
+      {
+        // 达妙 MIT 回传帧解包（位置/速度/力矩线性映射还原）
+        motor->decode_dm_feedback();
+        state_positions_[i] = motor->angle_current;
+        state_velocities_[i] = motor->measure.speed_aps;
+        state_currents_[i] = motor->measure.real_current;
+        state_temperatures_[i] = motor->measure.temperature;
+        continue;
+      }
       state_positions_[i] = motor->angle_current;
       state_velocities_[i] = motor->measure.speed_aps;
       state_currents_[i] = motor->measure.real_current;
@@ -343,53 +392,88 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
     }
   }
   //根据电机类型和命令接口，填充每个电机的发送缓冲区
-  //1.从命令接口获取命令数值
+  //1.从命令接口获取命令数值（position/velocity/effort）
   for (size_t i = 0; i < joint_count; i++)
   {
     double command = 0.0;
-    if (!std::isnan(cmd_positions_[i]) && info_.joints[i].command_interfaces[0].name == "position")
+    const std::string& iface_name = info_.joints[i].command_interfaces[0].name;
+    if (iface_name == "position" && !std::isnan(cmd_positions_[i]))
     {
-      command = (cmd_positions_[i]);
+      command = cmd_positions_[i];
     }
-    else if (!std::isnan(cmd_velocities_[i]) &&
-             info_.joints[i].command_interfaces[0].name == "velocity")
+    else if (iface_name == "velocity" && !std::isnan(cmd_velocities_[i]))
     {
       command = cmd_velocities_[i];
     }
+    else if (iface_name == "effort" && !std::isnan(cmd_efforts_[i]))
+    {
+      command = cmd_efforts_[i];
+    }
 
     auto motor = motors_[i];
-    //将命令数值转换为电机输出值，并写入电机对象
-    motor->output = static_cast<int16_t>(command);
-    //2.检查电机,将命令数值写入缓存区
-    auto current_time = time;
-    if(motor->check_connection(current_time))
+    //电机失联或虚拟关节则跳过
+    if (!motor->check_connection(time))
     {
-    for (auto can_device : can_devices_)
+      continue;
+    }
+
+    switch (motor->config_.motor_type)
+    {
+      // ---------- DJI 电机：int16 电流帧，一帧带4个电机 ----------
+      case M2006:
+      case M3508:
+      case GM6020:
       {
-        if (motor->config_.can_bus == can_device->interface)
+        //命令为电流/电压原始值，直接转 int16 填入控制帧
+        motor->output = static_cast<int16_t>(command);
+        for (auto can_device : can_devices_)
         {
-           /*根据电机的报文标识符选择发送缓冲区的索引 
-           一帧能和控制四个但是这四个电机的标识符必须一样
-            但是既可能是0x200也可能是0x1ff也可能是0X2ff
-           */
-          size_t buff_index = (motor->config_.identifier == 0x200) ? 0 :
-                              (motor->config_.identifier == 0x1ff) ? 1 :2;
-          
-          /*在这帧里的第几个字节大疆的电机一帧带四个电机的电流
-                组内槽位 tx_id	占据的字节位置	data_index
-                    1	          字节 0、1	        0
-                    2	          字节 2、3	        2
-                    3	          字节 4、5	        4
-                    4	          字节 6、7	        6
-          */
-          size_t data_index = (motor->config_.tx_id - 1) * 2;
+          if (motor->config_.can_bus == can_device->interface)
+          {
+             /*根据电机的报文标识符选择发送缓冲区的索引 
+             一帧能和控制四个但是这四个电机的标识符必须一样
+              但是既可能是0x200也可能是0x1ff也可能是0X2ff
+             */
+            size_t buff_index = (motor->config_.identifier == 0x200) ? 0 :
+                                (motor->config_.identifier == 0x1ff) ? 1 :2;
+            
+            /*在这帧里的第几个字节大疆的电机一帧带四个电机的电流
+                  组内槽位 tx_id	占据的字节位置	data_index
+                      1	          字节 0、1	        0
+                      2	          字节 2、3	        2
+                      3	          字节 4、5	        4
+                      4	          字节 6、7	        6
+            */
+            size_t data_index = (motor->config_.tx_id - 1) * 2;
 
-          can_device->tx_buff[buff_index][data_index] = motor->output >> 8;
-          can_device->tx_buff[buff_index][data_index + 1] = motor->output & 0xff;
+            can_device->tx_buff[buff_index][data_index] = motor->output >> 8;
+            can_device->tx_buff[buff_index][data_index + 1] = motor->output & 0xff;
 
-          break;
+            break;
+          }
         }
+        break;
       }
+      // ---------- 达妙电机：MIT 力矩模式（p=0,v=0,kp=0,kd=0, t_ff=目标力矩） ----------
+      case DM6006:
+      case DM4310:
+      {
+        //命令为力矩(N·m)，按 MIT 帧 12 位线性映射打包，帧ID = 电机 CAN ID
+        std::array<uint8_t, 8> dm_frame{ 0 };
+        DJI_Motor::encode_mit_frame(dm_frame, 0.0f, 0.0f, 0.0f, 0.0f,
+                                    static_cast<float>(command), motor->config_);
+        for (auto can_device : can_devices_)
+        {
+          if (motor->config_.can_bus == can_device->interface)
+          {
+            sendCanFrame(can_device, dm_frame.data(), dm_frame.size(), motor->config_.tx_id);
+            break;
+          }
+        }
+        break;
+      }
+      default:
+        break;
     }
   }
     for (auto can_device : can_devices_)

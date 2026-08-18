@@ -54,6 +54,16 @@ spr_gimbal_controller:
         default_value: 0.0,
         description: "Lower integral clamp."
       }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of position PID output (current/torque raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of position PID output (current/torque raw value)"
+      }
  small_yaw:
     joint: {
       type: string,
@@ -109,6 +119,16 @@ spr_gimbal_controller:
         default_value: 0.0,
         description: "Lower integral clamp."
       }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of position PID output (current/torque raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of position PID output (current/torque raw value)"
+      }
  big_yaw:
     joint: {
       type: string,
@@ -163,4 +183,14 @@ spr_gimbal_controller:
         type: double,
         default_value: 0.0,
         description: "Lower integral clamp."
+      }
+      output_min: {
+        type: double,
+        default_value: -30000.0,
+        description: "Lower clamp of position PID output (current/torque raw value)"
+      }
+      output_max: {
+        type: double,
+        default_value: 30000.0,
+        description: "Upper clamp of position PID output (current/torque raw value)"
       }

@@ -7,4 +7,11 @@
       Hardware Interface for Spr robot motors using ros2_control.
     </description>
   </class>
+  <class name="spr_hw_interface/EffortMockSystem"
+         type="spr_hw_interface::EffortMockSystem"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Lightweight effort mock hardware for debugging the position->effort chain.
+    </description>
+  </class>
 </library>

@@ -47,6 +47,10 @@ typedef struct
   uint32_t identifier;//报文标识符
   uint16_t offset;//电机编码器零点偏移
   Motor_Type_e motor_type;
+  // 达妙电机 MIT 线性映射满量程（由达妙调试助手设定，发送/接收必须一致）
+  float pos_max{ 12.5f };   // 位置 ±rad
+  float vel_max{ 30.0f };   // 速度 ±rad/s
+  float tor_max{ 10.0f };   // 扭矩 ±N·m
 } Motor_Config_t;
 
 class DJI_Motor
@@ -70,9 +74,24 @@ public:
   int16_t output = 0;
   double angle_current = 0.0;
 
+  // 达妙 MIT 反馈（经线性映射还原的物理量）
+  double dm_position_{ 0.0 };  // rad
+  double dm_velocity_{ 0.0 };  // rad/s
+  double dm_torque_{ 0.0 };    // N·m
+  uint8_t dm_err_{ 0 };        // 状态(0失能/1使能/3制动/...)
+
   DJI_Motor(const Motor_Config_t& config);
-  void decode_feedback();
+  void decode_feedback();       // 大疆编码器格式解包
+  void decode_dm_feedback();    // 达妙 MIT 回传帧解包
   void stop() { output = 0; }
+
+  // 达妙 MIT 浮点<->定点线性映射（与调试助手设定一致）
+  static int float_to_uint(float x, float x_min, float x_max, int bits);
+  static float uint_to_float(int x_int, float x_min, float x_max, int bits);
+  // 组装达妙 MIT 控制帧（8字节：p16/v12/kp12/kd12/t12）
+  static void encode_mit_frame(std::array<uint8_t, 8>& frame,
+                               float p, float v, float kp, float kd, float t,
+                               const Motor_Config_t& cfg);
 
   bool check_connection(const rclcpp::Time& current_time);
   void update_timestamp(const rclcpp::Time& time) { last_comm_time_ = time; }

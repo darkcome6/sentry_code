@@ -22,6 +22,9 @@ gimbal_controller:
         i_max: 1.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
+        # 位置环输出限幅（电流/力矩原始值，DM4310 按实际力矩范围调小）
+        output_min: -30000.0
+        output_max: 30000.0
     small_yaw:
       joint: "small_yaw_joint"
       max: 1.57
@@ -36,6 +39,9 @@ gimbal_controller:
         i_max: 1.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
+        # 位置环输出限幅（电流原始值，GM6020 实际范围约 ±30000）
+        output_min: -30000.0
+        output_max: 30000.0
     big_yaw:
       joint: "big_yaw_joint"
       max: 1.57
@@ -50,3 +56,6 @@ gimbal_controller:
         i_max: 1.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
+        # 位置环输出限幅（力矩原始值，DM6006 按实际力矩范围调小）
+        output_min: -30000.0
+        output_max: 30000.0

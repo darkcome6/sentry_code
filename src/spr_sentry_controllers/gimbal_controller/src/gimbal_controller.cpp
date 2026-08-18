@@ -50,9 +50,10 @@ using controller_interface::InterfaceConfiguration;
   SprGimbalController::command_interface_configuration() const
   {
     std::vector<std::string> joint_names;
-    joint_names.push_back(params_.pitch.joint + "/position");
-    joint_names.push_back(params_.small_yaw.joint + "/position");
-    joint_names.push_back(params_.big_yaw.joint + "/position");
+    //串级PID最终输出电流/力矩参考(原始值)，通过 effort 命令接口交给硬件层
+    joint_names.push_back(params_.pitch.joint + "/effort");
+    joint_names.push_back(params_.small_yaw.joint + "/effort");
+    joint_names.push_back(params_.big_yaw.joint + "/effort");
     //花括号构建初始化参数，INDIVIDUAL类型 
     return { interface_configuration_type::INDIVIDUAL, joint_names };
   };
@@ -109,48 +110,70 @@ using controller_interface::InterfaceConfiguration;
   SprGimbalController::update(const rclcpp::Time& time,const rclcpp::Duration& period)
   {
   (void)time;
-  (void)period;
   //更新参数，报文，读取数据,模式
   update_parameters();
   auto cmd = *recv_cmd_ptr_.readFromRT();
   last_mode_ =mode_;
   mode_ =cmd->mode;
-  double pitch_fb = 0.0, small_yaw_fb = 0.0,big_yaw_fb=0.0;
 
-  pitch_fb = pitch_state_interface_->get_value();
-  small_yaw_fb =small_yaw_state_interface_->get_value();
-  big_yaw_fb = big_yaw_state_interface_->get_value();
-  
-  pitch_pos_fb_=pitch_fb;
-  small_yaw_pos_fb_=small_yaw_fb;
-  big_yaw_pos_fd_=big_yaw_fb;
+  //读取三个关节位置反馈
+  double pitch_fb = pitch_state_interface_->get_value();
+  double small_yaw_fb = small_yaw_state_interface_->get_value();
+  double big_yaw_fb = big_yaw_state_interface_->get_value();
 
-  
-  switch (mode_)////0 保持不动 1 扫描模式 2自瞄模式 3遥控模式
+  pitch_pos_fb_ = pitch_fb;
+  small_yaw_pos_fb_ = small_yaw_fb;
+  big_yaw_pos_fd_ = big_yaw_fb;
+
+  //模式逻辑：算出三个关节目标位置 {pitch, small_yaw, big_yaw}
+  //0 保持不动 1 扫描模式 2自瞄模式 3遥控模式
+  std::array<double, 3> target{ pitch_fb, small_yaw_fb, big_yaw_fb };
+  switch (mode_)
   {
-    case 0:
-    {
-      // 保持不动模式
+    case 0:   // 保持不动：目标=当前反馈
       break;
-    }
     case 1:
-    {
-      (void)scan_mode();
+      target = scan_mode();
       break;
-    }
     case 2:
-    {
-      (void)aim_mode();
+      target = aim_mode();
       break;
-    }
     case 3:
-    {
-      (void)remote_control();
+      target = remote_control();
       break;
-    }
     default:
       break;
   }
+
+  //串级PID(位置环→电流/力矩)：误差→控制量(原始值)，限幅后写 effort 命令接口
+  pitch_pos_cmd_ = compute_position_pid(pid_pitch_pos_, target[0], pitch_fb, period,
+                                        params_.pitch.pid.output_min, params_.pitch.pid.output_max);
+  small_yaw_pos_cmd_ = compute_position_pid(pid_small_yaw_pos_, target[1], small_yaw_fb, period,
+                                            params_.small_yaw.pid.output_min, params_.small_yaw.pid.output_max);
+  big_yaw_pos_cmd_ = compute_position_pid(pid_big_yaw_pos_, target[2], big_yaw_fb, period,
+                                          params_.big_yaw.pid.output_min, params_.big_yaw.pid.output_max);
+
+  //写入硬件命令接口（effort=电流/力矩参考原始值）
+  pitch_command_interface_->set_value(pitch_pos_cmd_);
+  small_yaw_command_interface_->set_value(small_yaw_pos_cmd_);
+  big_yaw_command_interface_->set_value(big_yaw_pos_cmd_);
+
+  //实时安全发布云台状态到 ~/gimbal_state（后台线程真正发送）
+  if (rt_gimbal_state_pub_ && rt_gimbal_state_pub_->trylock())
+  {
+    auto & m = rt_gimbal_state_pub_->msg_;
+    m.header.stamp = time;
+    m.mode = mode_;
+    m.is_tracking = target_valid_;
+    m.pitch_angle_ref = target[0];
+    m.small_yaw_angle_ref = target[1];
+    m.big_yaw_angle_ref = target[2];
+    m.pitch_current_ref = pitch_pos_cmd_;
+    m.small_yaw_current_ref = small_yaw_pos_cmd_;
+    m.big_yaw_current_ref = big_yaw_pos_cmd_;
+    rt_gimbal_state_pub_->unlockAndPublish();
+  }
+
   return controller_interface::return_type::OK;
 };
 
@@ -210,6 +233,16 @@ using controller_interface::InterfaceConfiguration;
     if (!param_listener_->is_old(params_))
     {return;}
     params_ = param_listener_->get_params();
+  }
+  //串级PID(位置环→电流/力矩)：位置误差经PID得到控制量(原始值)，限幅后返回
+  double SprGimbalController::compute_position_pid(
+      const std::shared_ptr<control_toolbox::PidROS>& pid,
+      double ref, double fb, const rclcpp::Duration& period,
+      double out_min, double out_max)
+  {
+    const double err = ref - fb;
+    const double out = pid->computeCommand(err, period);
+    return std::clamp(out, out_min, out_max);
   }
   /// @brief 扫描模式：时间驱动平滑扫描；一旦视觉给出有效目标，自动切到自瞄跟踪
   std::array<double, 3> SprGimbalController::scan_mode()

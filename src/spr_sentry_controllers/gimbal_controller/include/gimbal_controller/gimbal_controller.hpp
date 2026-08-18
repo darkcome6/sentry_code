@@ -64,6 +64,10 @@ private:
   std::array<double, 3> scan_mode();
   std::array<double, 3> aim_mode();
   std::array<double, 3> remote_control();
+  //串级PID(位置环→电流/力矩)：误差→控制量，限幅后写 effort 命令接口
+  double compute_position_pid(const std::shared_ptr<control_toolbox::PidROS>& pid,
+                              double ref, double fb, const rclcpp::Duration& period,
+                              double out_min, double out_max);
   //临时存储
   double pitch_pos_cmd_{ 0.0 }, small_yaw_pos_cmd_{ 0.0 },big_yaw_pos_cmd_{ 0.0 };
   double pitch_pos_fb_{ 0.0 }, small_yaw_pos_fb_{ 0.0 },big_yaw_pos_fd_{ 0.0 };

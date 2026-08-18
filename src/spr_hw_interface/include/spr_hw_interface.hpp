@@ -84,8 +84,11 @@ private:
     //数组  命令接口  状态接口
     std::vector<double> cmd_positions_;
     std::vector<double> cmd_velocities_;
+    std::vector<double> cmd_efforts_;
+
     std::vector<double> state_positions_;
     std::vector<double> state_velocities_;
+
     std::vector<double> state_currents_;
     std::vector<double> state_temperatures_;
 };

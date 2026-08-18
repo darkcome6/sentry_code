@@ -19,6 +19,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   src/socket_can/socket_can_receiver.cpp
   src/socket_can/socket_can_sender.cpp
   src/spr_hw_interface.cpp
+  src/effort_mock_system.cpp
 )
 # 硬件接口编译成插件供 ROS2 controller_manager 加载使用
 pluginlib_export_plugin_description_file(hardware_interface spr_hw_interface.xml)
