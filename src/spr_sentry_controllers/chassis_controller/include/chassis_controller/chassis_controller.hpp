@@ -12,6 +12,7 @@
 #include <control_toolbox/pid_ros.hpp>
 #include "realtime_tools/realtime_buffer.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <array>
 #include <memory>
@@ -46,13 +47,17 @@ public:
 private:
   // 更新参数
   void update_parameters();
-  // 麦克纳姆轮逆运动学：底盘速度(vx,vy,wz) -> 四轮目标速度（TODO 实现）
+  // 麦克纳姆轮逆运动学：底盘速度(vx,vy,wz) -> 四轮目标速度
   // 返回顺序: {左前, 右前, 左后, 右后}
   std::array<double, 4> inverse_kinematics(double vx, double vy, double wz);
+  // 麦克纳姆轮正运动学：四轮速度 -> 车体速度 {vx, vy, wz}
+  std::array<double, 4> forward_kinematics(const std::array<double, 4> & wheel_vel);
   // 速度环 PID：轮速误差 -> 电流，限幅后返回
   double compute_velocity_pid(const std::shared_ptr<control_toolbox::PidROS> & pid,
                               double ref, double fb, const rclcpp::Duration & period,
                               double out_min, double out_max);
+  // 由轮速反馈更新里程计位姿并发布 odom->base_footprint TF
+  void update_odometry(const rclcpp::Time & time, const rclcpp::Duration & period);
 
   // 参数
   std::shared_ptr<spr_chassis_controller::ParamListener> param_listener_;
@@ -75,6 +80,12 @@ private:
   // 四轮命令（电流）与反馈（轮速）
   std::array<double, kWheelCount> wheel_cmd_{ 0.0, 0.0, 0.0, 0.0 };
   std::array<double, kWheelCount> wheel_fb_{ 0.0, 0.0, 0.0, 0.0 };
+
+  // 里程计：位姿积分 + odom->base_footprint TF 发布（让车体在 RViz 中真实移动）
+  double odom_x_{ 0.0 };
+  double odom_y_{ 0.0 };
+  double odom_yaw_{ 0.0 };
+  std::shared_ptr<tf2_ros::TransformBroadcaster> odom_tf_broadcaster_{ nullptr };
 };
 }  // namespace spr_chassis_controller
 #endif  // CHASSIS_CONTROLLER_HPP_

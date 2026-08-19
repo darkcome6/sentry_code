@@ -17,6 +17,7 @@
   <depend>generate_parameter_library</depend>
   <depend>pluginlib</depend>
   <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
   <depend>spr_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>

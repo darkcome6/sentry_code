@@ -50,6 +50,10 @@ private:
   double accel_per_effort_{ 0.5 };   // 单位 effort 产生的角加速度 (rad/s^2)
   double damping_{ 0.99 };           // 每周期速度阻尼（effort 模式）
   double position_gain_{ 0.2 };      // 每周期向目标位置的接近比例（position 模式 0~1）
+  double friction_{ 0.5 };           // 粘滞摩擦系数 (1/s)，速度越大阻力越大
+  double velocity_deadzone_{ 0.01 }; // 速度死区 (rad/s)，低于此视为停止（静止不晃动）
+  double max_velocity_{ 50.0 };      // 轮速物理上限 (rad/s)，防止闭环发散
+  double effort_deadzone_{ 5.0 };    // 指令力死区：|effort| 低于此且速度低时锁死轮速(静摩擦)
 };
 }  // namespace spr_hw_interface
 #endif  // SPR_HW_INTERFACE_EFFORT_MOCK_SYSTEM_HPP_

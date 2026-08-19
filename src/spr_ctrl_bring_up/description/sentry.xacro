@@ -10,7 +10,8 @@
         <hardware>
             <!-- 无真机时用 effort 模拟硬件调试位置环->effort 链路 -->
             <plugin>spr_hw_interface/EffortMockSystem</plugin>
-            <param name="accel_per_effort">0.5</param>
+            <param name="accel_per_effort">2</param>
+            <param name="max_velocity">50</param>
         </hardware>
 <!--
 std::string motor_name;

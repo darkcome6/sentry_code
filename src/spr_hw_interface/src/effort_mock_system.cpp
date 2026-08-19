@@ -39,6 +39,20 @@ hardware_interface::CallbackReturn EffortMockSystem::on_init(
         it->second.c_str(), accel_per_effort_);
     }
   }
+  it = info_.hardware_parameters.find("max_velocity");
+  if (it != info_.hardware_parameters.end())
+  {
+    try
+    {
+      max_velocity_ = std::stod(it->second);
+    }
+    catch (const std::exception & e)
+    {
+      RCLCPP_WARN(rclcpp::get_logger("EffortMockSystem"),
+        "Failed to parse max_velocity '%s', using default %.3f",
+        it->second.c_str(), max_velocity_);
+    }
+  }
 
   RCLCPP_INFO(rclcpp::get_logger("EffortMockSystem"),
     "EffortMockSystem initialized with %ld joints, accel_per_effort=%.3f",
@@ -144,6 +158,21 @@ hardware_interface::return_type EffortMockSystem::read(
       state_efforts_[i] = cmd_efforts_[i];
       state_velocities_[i] = state_velocities_[i] * damping_
         + accel_per_effort_ * cmd_efforts_[i] * dt;
+      // 粘滞摩擦：速度越大阻力越大，增强稳定性
+      state_velocities_[i] *= (1.0 - friction_ * dt);
+      // 轮速物理上限：防止闭环参数不当导致速度发散
+      state_velocities_[i] = std::clamp(state_velocities_[i], -max_velocity_, max_velocity_);
+      // 静态摩擦锁：指令力很小且速度很小时直接锁死（静止不滑/不漂移）
+      if (std::abs(cmd_efforts_[i]) < effort_deadzone_ &&
+          std::abs(state_velocities_[i]) < velocity_deadzone_)
+      {
+        state_velocities_[i] = 0.0;
+      }
+      // 速度死区：低速视为停，避免静止时残留速度被里程计放大晃动
+      if (std::abs(state_velocities_[i]) < velocity_deadzone_)
+      {
+        state_velocities_[i] = 0.0;
+      }
       state_positions_[i] += state_velocities_[i] * dt;
     }
   }

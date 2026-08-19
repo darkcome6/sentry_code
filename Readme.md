@@ -179,6 +179,47 @@ ros2 topic echo /joint_states
 
 ---
 
+### 6.1 RVIZ 可视化调试（模拟硬件 / 假电机模式）
+
+无需真机 / 无 CAN 环境时，`sentry.xacro` 默认启用 `EffortMockSystem`（轻量 effort 模拟硬件），
+可在 RVIZ 中直接观察云台三轴与底盘四轮的运动，用于调试串级 PID → effort 链路与里程计。
+
+**启动步骤：**
+
+```bash
+cd sentry_code
+source install/setup.bash
+
+# 1) 启动 robot_state_publisher + controller_manager + 控制器（与第 6 节相同）
+ros2 launch spr_ctrl_bring_up sentry_bringup.launch.py
+
+# 2) 另开一个终端，单独启动 RViz（避免与控制器竞争资源）并加载项目自带视图
+source install/setup.bash
+rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rviz/sentry.rviz
+```
+
+**可视化内容（`config/rviz/sentry.rviz` 已预置）：**
+
+- **Grid**：地面参考网格，参考系跟随 Fixed Frame；
+- **TF**：显示 `odom → base_footprint → base_link → bigyaw_link → small_yaw_link → pitch_link` 与四个车轮的坐标系；
+- **RobotModel**：订阅 `/robot_description`，渲染 URDF 模型（云台 + 麦克纳姆轮底盘）。
+
+**调试要点：**
+
+- **Fixed Frame**：无底盘运动时建议设为 `base_footprint`（云台 / 车轮坐标系稳定，便于观察关节转动）；
+  下发底盘命令后建议设为 `odom`，可看到整个车体随里程计真实移动（`odom → base_footprint` TF 由 `chassis_controller` 动态发布）。
+- **观察云台**：沿用第 6 节的话题发布遥控模式目标角，RVIZ 中 `pitch_link` / `small_yaw_link` / `bigyaw_link` 随之转动，
+  对照 `ros2 topic echo /gimbal_controller/gimbal_state` 验证位置环闭环。
+- **观察底盘**：若 `chassis_controller` 支持底盘速度指令，发布后四轮转动且车体在 `odom` 系下移动（模拟硬件下无真实里程，由控制器积分得到）。
+- **无 TF / 模型不动的排查**：确认 `ros2 topic echo /joint_states` 有数据（joint_state_broadcaster 已加载）、
+  `ros2 topic echo /tf` 有 `odom → base_footprint`（底盘控制器已激活）；若 RViz 报 "No transform"，
+  检查 Fixed Frame 是否为有效帧（`base_footprint` / `odom`）。
+
+> 提示：`use_sim_time` 默认 `false`（无 Gazebo 时钟），RVIZ 无需开启 "Use Sim Time"；
+> 真机调试时仅需在 `sentry.xacro` 中把 `<hardware>` 段换回 `SprHardwareInterface` 并配置 CAN。
+
+---
+
 ## 7. 依赖
 
 - ROS2（ros2_control / controller_manager）

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <robot name="sentry">
-  <link name="odom"/>
+  <link name="base_footprint"/>  <!-- 底盘里程计原点(URDF根)，odom->base_footprint 由 chassis_controller 动态发布 -->
   <link name="base_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -20,7 +20,7 @@
   </link>
   <joint name="base_joint" type="fixed">
     <origin xyz="0 0 0.15" rpy="0 0 0" />
-    <parent link="odom" />
+    <parent link="base_footprint" />
     <child link="base_link" />
     <axis xyz="0 0 0" />
   </joint>

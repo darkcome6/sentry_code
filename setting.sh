@@ -29,3 +29,7 @@ fi
 # candump can0 -L              # 带时间戳显示
 # candump -e can0              # 十六进制 + ASCII 显示（含不可见字符）
 # candump -td can0             # 带相对时间戳
+
+# 以后测试前建议清理残留
+pkill -9 -f "ros2_control_node"; pkill -9 -f "robot_state_publisher"; \
+pkill -9 -f "sentry_bringup"; pkill -9 -f "spawner"; pkill -9 -f "teleop_sentry"

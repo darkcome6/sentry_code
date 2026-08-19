@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace spr_chassis_controller
 {
@@ -129,6 +130,9 @@ controller_interface::return_type ChassisController::update(
     params_.right_wheel_back.pid.output_min, params_.right_wheel_back.pid.output_max);
   wheel_command_interfaces_[3]->set_value(wheel_cmd_[3]);
 
+  // 5) 由轮速反馈更新里程计并发布 odom->base_footprint TF（车体移动）
+  update_odometry(time, period);
+
   return controller_interface::return_type::OK;
 }
 
@@ -136,6 +140,9 @@ controller_interface::CallbackReturn ChassisController::on_activate(
   const rclcpp_lifecycle::State & previous_state)
 {
   (void)previous_state;
+  // 创建 odom TF 广播器（发布 odom->base_footprint，让车体在 RViz 中真实移动）
+  odom_tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(get_node());
+
   // 借出状态接口（轮速反馈）
   for (size_t i = 0; i < kWheelCount; i++)
   {
@@ -204,6 +211,58 @@ std::array<double, 4> ChassisController::inverse_kinematics(double vx, double vy
     ( vx - vy + half * wz) / R,   // 左后轮
     ( vx + vy - half * wz) / R,   // 右后轮
   };
+}
+
+// 麦克纳姆轮正运动学：四轮轮速 -> 车体速度 {vx, vy, wz}
+std::array<double, 4> ChassisController::forward_kinematics(
+  const std::array<double, 4> & w)
+{
+  const double R = params_.wheel_radius;
+  const double k = (params_.wheel_base + params_.track_width) / 2.0;
+  return {
+    R / 4.0 * ( w[0] + w[1] + w[2] + w[3] ),              // vx
+    R / 4.0 * (-w[0] + w[1] - w[2] + w[3] ),              // vy
+    R / (4.0 * k) * (-w[0] + w[1] + w[2] - w[3] ),        // wz
+    0.0
+  };
+}
+
+// 由轮速反馈积分里程计位姿，并发布 odom -> base_footprint TF
+void ChassisController::update_odometry(
+  const rclcpp::Time & time, const rclcpp::Duration & period)
+{
+  if (!odom_tf_broadcaster_)
+  {
+    return;
+  }
+  const double dt = period.seconds();
+  if (dt <= 0.0)
+  {
+    return;
+  }
+  const auto v = forward_kinematics(wheel_fb_);
+  const double cos_yaw = std::cos(odom_yaw_);
+  const double sin_yaw = std::sin(odom_yaw_);
+  // 车体系速度 -> 世界系积分
+  odom_x_ += (v[0] * cos_yaw - v[1] * sin_yaw) * dt;
+  odom_y_ += (v[0] * sin_yaw + v[1] * cos_yaw) * dt;
+  odom_yaw_ += v[2] * dt;
+  // yaw 归一化到 [-pi, pi]
+  while (odom_yaw_ > M_PI) { odom_yaw_ -= 2.0 * M_PI; }
+  while (odom_yaw_ < -M_PI) { odom_yaw_ += 2.0 * M_PI; }
+
+  geometry_msgs::msg::TransformStamped t;
+  t.header.stamp = time;
+  t.header.frame_id = "odom";
+  t.child_frame_id = "base_footprint";
+  t.transform.translation.x = odom_x_;
+  t.transform.translation.y = odom_y_;
+  t.transform.translation.z = 0.0;
+  t.transform.rotation.x = 0.0;
+  t.transform.rotation.y = 0.0;
+  t.transform.rotation.z = std::sin(odom_yaw_ * 0.5);
+  t.transform.rotation.w = std::cos(odom_yaw_ * 0.5);
+  odom_tf_broadcaster_->sendTransform(t);
 }
 
 // 速度环 PID：轮速误差经 PID 得到电流(原始值)，限幅后返回
