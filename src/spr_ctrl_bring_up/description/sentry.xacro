@@ -1,18 +1,31 @@
 <?xml version="1.0"?>
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="sentry">
+    <xacro:arg name="hardware_type" default="mock" />
     <xacro:include filename="$(find spr_sentry_description)/sentry.urdf.xacro" />
     <ros2_control name="SprHardwareInterface" type="system">
-        <!-- <hardware>
-            <plugin>spr_hw_interface/SprHardwareInterface</plugin>
-            <param name="can_device_count_">2</param>
-         </hardware> -->
-        <hardware>
-            <!-- 无真机时用 effort 模拟硬件调试位置环->effort 链路 -->
-            <plugin>spr_hw_interface/EffortMockSystem</plugin>
-            <param name="accel_per_effort">2</param>
-            <param name="max_velocity">50</param>
-        </hardware>
+        <!-- 通过 launch 参数 hardware_type 切换硬件后端：real / mock / mujoco -->
+        <xacro:if value="${'$(arg hardware_type)' == 'real'}">
+            <hardware>
+                <plugin>spr_hw_interface/SprHardwareInterface</plugin>
+                <param name="can_device_count_">2</param>
+            </hardware>
+        </xacro:if>
+        <xacro:if value="${'$(arg hardware_type)' == 'mock'}">
+            <hardware>
+                <!-- 无真机时用 effort 模拟硬件调试位置环->effort 链路 -->
+                <plugin>spr_hw_interface/EffortMockSystem</plugin>
+                <param name="accel_per_effort">2</param>
+                <param name="max_velocity">50</param>
+            </hardware>
+        </xacro:if>
+        <xacro:if value="${'$(arg hardware_type)' == 'mujoco'}">
+            <hardware>
+                <!-- MuJoCo 物理仿真硬件（model_path 需改成你实际的模型路径） -->
+                <plugin>spr_hw_interface/MujocoInterface</plugin>
+                <param name="model_path">$(find spr_sentry_description)/models/sentry.xml</param>
+            </hardware>
+        </xacro:if>
 <!--
 std::string motor_name;
   std::string can_bus;

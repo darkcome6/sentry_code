@@ -12,8 +12,11 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'description', 'sentry.xacro')
     params_file = os.path.join(pkg_share, 'config', 'sentry.yaml')
 
+    # 硬件类型：real（真机）/ mock（模拟）/ mujoco（MuJoCo 仿真）
+    hardware_type = LaunchConfiguration('hardware_type')
+
     # 通过 xacro 生成 robot_description（会解析 $(find spr_sentry_description)）
-    robot_description_content = Command(['xacro ', xacro_file])
+    robot_description_content = Command(['xacro ', xacro_file, ' hardware_type:=', hardware_type])
     robot_description = {'robot_description': robot_description_content}
 
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -55,6 +58,9 @@ def generate_launch_description():
     #   rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rviz/sentry.rviz
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'hardware_type', default_value='mock',
+            description='Hardware backend: real (CAN), mock (simulated), or mujoco (MuJoCo)'),
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
             description='Use simulated (Gazebo / ros2_control) clock'),
