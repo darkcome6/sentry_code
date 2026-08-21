@@ -2,7 +2,7 @@
 
 基于 **ROS2 + ros2_control** 的 RoboMaster 哨兵（Sentry）机器人上位机软件工作区，包含：
 
-- **硬件接口**：通过 CAN 总线驱动 DJI（大疆）与达妙（DM）电机，支持 effort 电流/力矩控制（`spr_hw_interface`）
+- **硬件接口**：三种后端一键切换 —— 真机 CAN（DJI/DM 电机，effort 电流/力矩控制）、`EffortMockSystem` 模拟、MuJoCo 物理仿真（`spr_hw_interface`）
 - **云台控制器**：pitch / small_yaw / big_yaw 三轴串级控制（位置环 → 电流/力矩参考），支持扫描 / 自瞄 / 遥控 / 保持四种模式（`gimbal_controller`）
 - **机器人描述**：哨兵 URDF/Xacro 模型（`spr_sentry_description`）
 - **自定义消息**：GimbalCmd / GimbalState（`spr_msgs`）
@@ -51,18 +51,23 @@ flowchart LR
 
 ```
 sentry_code/
-├── common/
-│   └── ros2_control/        # 第三方参考源码（COLCON_IGNORE，不参与构建）
+├── stop_sentry.sh              # 清理残留 ROS 进程
+├── run_sentry.sh               # 一键启动（清理 + 启动，mock/real/mujoco 三模式）
+├── setting.sh                  # 打开 CAN 口（can0/can1）
+├── discussion/                 # 设计讨论文档（COLCON_IGNORE，不参与构建）
 └── src/
     ├── spr_msgs/                      # 自定义消息（GimbalCmd / GimbalState）
-    ├── spr_hw_interface/              # 硬件接口（system 类型，CAN + DJI/DM 电机）
-    ├── spr_sentry_description/        # 哨兵 URDF/Xacro 模型
+    ├── spr_hw_interface/              # 硬件接口：真机 CAN + EffortMockSystem + MujocoInterface
+    │   ├── include/mujoco_sim_interface.hpp
+    │   └── src/mujoco_sim_interface.cpp
+    ├── spr_sentry_description/        # 哨兵 URDF/Xacro 模型 + MuJoCo 模型
+    │   └── models/sentry.xml          # MuJoCo 仿真模型（URDF 转换 + 手工补全）
     ├── spr_sentry_controllers/
     │   └── gimbal_controller/         # 云台控制器
     └── spr_ctrl_bring_up/             # 启动与配置
         ├── config/sentry.yaml         # controller_manager 配置
-        ├── description/sentry.xacro   # ros2_control 硬件描述
-        └── launch/sentry_bringup.launch.py  # 启动文件
+        ├── description/sentry.xacro   # ros2_control 硬件描述（hardware_type 参数）
+        └── launch/sentry_bringup.launch.py  # 启动文件（hardware_type 参数）
 ```
 
 ---
@@ -94,7 +99,17 @@ sentry_code/
   - **达妙**（DM6006 / DM4310）：effort → MIT 力矩帧（`encode_mit_frame`，p/v/kp/kd/t 位打包，帧 ID = CAN ID）
 - `read()` 解码反馈：DJI 用编码器格式；达妙用 MIT 回传帧（`decode_dm_feedback`，位置/速度/力矩线性还原）。
 - `on_activate()` 发送达妙使能帧。
-- **`EffortMockSystem`**：轻量模拟硬件（无真机 / 无 CAN 时调试 effort 链路），`sentry.xacro` 中默认启用。
+
+**三种硬件后端**（通过 `hardware_type` 参数切换，控制器层完全无感）：
+
+| 插件 | `hardware_type` | 说明 |
+|---|---|---|
+| `spr_hw_interface/SprHardwareInterface` | `real` | 真机 CAN（DJI + 达妙电机） |
+| `spr_hw_interface/EffortMockSystem` | `mock` | 轻量 effort 模拟硬件，无真机调试控制链路（默认） |
+| `spr_hw_interface/MujocoInterface` | `mujoco` | MuJoCo 物理仿真 |
+
+- **`EffortMockSystem`**：`read()` 按"实际被写入的命令接口"自动选择驱动（position → 低通跟随 / velocity → 速度跟随 / effort → 力矩驱动），命令接口未写入时保持 NaN。
+- **`MujocoInterface`**：加载 `spr_sentry_description/models/sentry.xml`，`read()` 用真实时钟时间补偿推进 `mj_step` 并回读 `qpos/qvel/qfrc_actuator`；`write()` 按 effort > velocity > position 优先级写 `data->ctrl` 并限幅到 `ctrlrange`。详见 §6.3。
 
 ### 4.2 spr_sentry_description —— 机器人描述
 
@@ -134,9 +149,9 @@ sentry_code/
 
 ### 4.4 spr_ctrl_bring_up —— 启动与配置
 
-- `config/sentry.yaml`：controller_manager 参数（`update_rate: 1000Hz`、`joint_state_broadcaster`、`gimbal_controller` 等）。
-- `description/sentry.xacro`：ros2_control 硬件描述（默认用 `EffortMockSystem` 模拟硬件；接真机时取消注释 `SprHardwareInterface` 段并配置 CAN）。
-- `launch/sentry_bringup.launch.py`：启动文件（robot_state_publisher + controller_manager + spawner）。
+- `config/sentry.yaml`：controller_manager 参数（`update_rate: 500Hz`、`joint_state_broadcaster`、`gimbal_controller`、`chassis_controller` 等）。
+- `description/sentry.xacro`：ros2_control 硬件描述。通过 `<xacro:arg name="hardware_type" default="mock"/>` + `xacro:if` 在 `real` / `mock` / `mujoco` 三个 `<hardware>` 块间切换，关节声明三套共用。
+- `launch/sentry_bringup.launch.py`：启动文件（robot_state_publisher + controller_manager + spawner），新增 `hardware_type` launch 参数并传入 xacro。
 
 ---
 
@@ -157,12 +172,30 @@ python3 -c "import json,glob;out=[];[out.extend(json.load(open(f))) for f in glo
 
 ## 6. 运行
 
+### 6.1 一键启动（推荐）
+
+```bash
+cd sentry_code
+./run_sentry.sh              # 默认 mock（模拟硬件）
+./run_sentry.sh mock         # 模拟硬件
+./run_sentry.sh real         # 真机（自动拉起 CAN 口 can0/can1）
+./run_sentry.sh mujoco       # MuJoCo 物理仿真
+```
+
+`run_sentry.sh` 启动前会自动执行 `stop_sentry.sh`，清理上一次残留的进程
+（`ros2_control_node` / `robot_state_publisher` 等），避免旧 controller_manager 占用
+`/controller_manager` 服务导致 spawner 报 "Controller already loaded / no controller
+with this name exists"。若只想清理不启动：`./stop_sentry.sh`。
+
+### 6.2 手动启动
+
 ```bash
 cd sentry_code
 source install/setup.bash
 
 # 1) 启动：robot_state_publisher + controller_manager + 控制器
-ros2 launch spr_ctrl_bring_up sentry_bringup.launch.py
+#    hardware_type 可选 mock / real / mujoco，默认 mock
+ros2 launch spr_ctrl_bring_up sentry_bringup.launch.py hardware_type:=mock
 
 # 2) 下发遥控模式与目标角（BEST_EFFORT 下 --once 首帧可能丢失，用 -r 持续发布）
 ros2 topic pub -r 5 /gimbal_controller/gimbal_cmd spr_msgs/msg/GimbalCmd \
@@ -179,7 +212,24 @@ ros2 topic echo /joint_states
 
 ---
 
-### 6.1 RVIZ 可视化调试（模拟硬件 / 假电机模式）
+### 6.3 MuJoCo 物理仿真
+
+`MujocoInterface` 将 ros2_control 接入 MuJoCo 物理引擎，可在无真机时进行带动力学的仿真。
+
+```bash
+cd sentry_code
+./run_sentry.sh mujoco
+```
+
+- **仿真模型**：`src/spr_sentry_description/models/sentry.xml` —— 由 URDF 转换 + 手工补全
+  （7 个 `motor` 力矩执行器、底盘 `freejoint`、地面、占位惯性）。
+- **物理推进**：`model->opt.timestep = 0.002s`；`read()` 用真实时钟时间补偿，按需补 `mj_step` 步数。
+- **指令模式**：`write()` 支持 effort（力矩）/ velocity（速度伺服）/ position（位置 PD），
+  优先级 effort > velocity > position，力矩限幅到 `ctrlrange`。
+- **底盘驱动**：`base_link` 带 freejoint，发 `cmd_vel` 即可让四轮转动、车体在地面移动。
+- **修改模型**：改 `models/sentry.xml` 后重新 `colcon build --packages-select spr_sentry_description` 即可（models/ 随包安装）。
+
+### 6.4 RVIZ 可视化调试（模拟硬件 / 假电机模式）
 
 无需真机 / 无 CAN 环境时，`sentry.xacro` 默认启用 `EffortMockSystem`（轻量 effort 模拟硬件），
 可在 RVIZ 中直接观察云台三轴与底盘四轮的运动，用于调试串级 PID → effort 链路与里程计。
@@ -190,8 +240,8 @@ ros2 topic echo /joint_states
 cd sentry_code
 source install/setup.bash
 
-# 1) 启动 robot_state_publisher + controller_manager + 控制器（与第 6 节相同）
-ros2 launch spr_ctrl_bring_up sentry_bringup.launch.py
+# 1) 启动 robot_state_publisher + controller_manager + 控制器（mock 模式）
+./run_sentry.sh mock
 
 # 2) 另开一个终端，单独启动 RViz（避免与控制器竞争资源）并加载项目自带视图
 source install/setup.bash
@@ -216,7 +266,7 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
   检查 Fixed Frame 是否为有效帧（`base_footprint` / `odom`）。
 
 > 提示：`use_sim_time` 默认 `false`（无 Gazebo 时钟），RVIZ 无需开启 "Use Sim Time"；
-> 真机调试时仅需在 `sentry.xacro` 中把 `<hardware>` 段换回 `SprHardwareInterface` 并配置 CAN。
+> 真机调试用 `./run_sentry.sh real`（或 `hardware_type:=real`）。
 
 ---
 
@@ -228,6 +278,7 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
 - `realtime_tools`（双缓冲 / 实时发布器）
 - `generate_parameter_library`（参数代码生成）
 - `pluginlib`
+- `mujoco_vendor`（仅 `mujoco` 模式需要：`sudo apt install ros-humble-mujoco-vendor`）
 - `spr_msgs`（自定义消息包）
 
 ---
@@ -237,6 +288,10 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
 - [x] 云台控制器 `update()` 接线（模式结果 → 串级 PID → effort `set_value`）
 - [x] `gimbal_state` 状态发布（RealtimePublisher）
 - [x] 达妙 MIT 协议（控制帧 / 回传帧编解码）
+- [x] 三种硬件后端（real / mock / mujoco）一键切换（`run_sentry.sh`）
+- [x] MuJoCo 接口 read/write（时间补偿 + 状态回读 + 指令写入）
+- [ ] MuJoCo 模型惯性为占位值，需按实际质量调整
+- [ ] 云台 pitch 连续关节位置环会飞转（角度缠绕 / 饱和），需控制器调参
 - [ ] 接真机：核对达妙使能帧字节、映射满量程（pos/vel/tor_max）与调试助手一致
 - [ ] `spr_msgs` 消息定义补全（视觉目标角速度字段，用于速度前馈）
 - [ ] IMU 加入后补充底盘角速度前馈（空间稳定）
