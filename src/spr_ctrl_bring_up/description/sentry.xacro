@@ -2,6 +2,7 @@
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="sentry">
     <xacro:arg name="hardware_type" default="mock" />
+    <xacro:arg name="scene" default="flat" />
     <xacro:include filename="$(find spr_sentry_description)/sentry.urdf.xacro" />
     <ros2_control name="SprHardwareInterface" type="system">
         <!-- 通过 launch 参数 hardware_type 切换硬件后端：real / mock / mujoco -->
@@ -21,9 +22,11 @@
         </xacro:if>
         <xacro:if value="${'$(arg hardware_type)' == 'mujoco'}">
             <hardware>
-                <!-- MuJoCo 物理仿真硬件（model_path 需改成你实际的模型路径） -->
-                <plugin>spr_hw_interface/MujocoInterface</plugin>
-                <param name="model_path">$(find spr_sentry_description)/models/sentry.xml</param>
+                <!-- 成熟方案：mujoco_ros2_control 硬件插件（自带 MuJoCo 仿真窗口）。
+                     mujoco_model 指向场景文件（场景 = 机器人本体 include + 世界/地形），
+                     由 launch 的 scene:=flat|rough|ramp|jump 参数切换。 -->
+                <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+                <param name="mujoco_model">$(find spr_sentry_description)/models/scenes/$(arg scene).xml</param>
             </hardware>
         </xacro:if>
 <!--

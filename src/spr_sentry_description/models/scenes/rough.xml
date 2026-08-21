@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  rough.xml —— 崎岖地形场景（heightfield）
+  用 hfield 生成起伏路面，测试底盘越障/打滑/稳定控制。
+  修改 <data> 里的 0~1 高度网格即可自定义地形起伏。
+-->
+<mujoco model="sentry_scene_rough">
+  <include file="../sentry_robot.xml"/>
+
+  <statistic center="0 0 0.2" extent="2"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <!-- 尺寸: [x半宽 y半宽 基高 起伏幅值]，基高必须 >0，起伏幅值 0.3m。
+         高度数据为 hfield 元素内的文本（8x8，值 0~1 乘以幅值得米）。 -->
+    <hfield name="rough_h" size="4 4 0.1 0.3" nrow="8" ncol="8">
+      0.00 0.20 0.50 0.80 0.60 0.30 0.10 0.00
+      0.10 0.40 0.70 1.00 0.80 0.40 0.20 0.00
+      0.30 0.60 0.90 0.70 0.50 0.70 0.90 0.50
+      0.20 0.50 0.80 0.60 0.40 0.80 1.00 0.60
+      0.00 0.30 0.60 0.90 0.70 0.50 0.60 0.30
+      0.20 0.50 0.40 0.70 1.00 0.60 0.20 0.10
+      0.40 0.70 0.30 0.50 0.80 0.40 0.00 0.20
+      0.60 0.90 0.50 0.20 0.40 0.70 0.30 0.10
+    </hfield>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="rough_ground" type="hfield" hfield="rough_h" rgba="0.45 0.5 0.35 1"/>
+  </worldbody>
+</mujoco>

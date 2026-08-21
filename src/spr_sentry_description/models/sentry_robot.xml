@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  sentry_robot.xml —— 哨兵机器人本体 MuJoCo 模型（不含世界/地形）
+  ================================================================
+  与 mujoco_ros2_control 方案配套：机器人本体与"世界/场景"分离。
+  场景文件（scenes/*.xml）通过 <include file="../sentry_robot.xml"/> 引用本文件，
+  并在其 worldbody 里追加地面 / 地形 / 障碍。
+
+  说明：
+    - 由 sentry.urdf.xacro 转换 + 手工补全（actuator、freejoint、惯性）
+    - 底盘 base_link 带 freejoint（6DOF 浮动），可在地形上移动
+    - 7 个 motor 力矩执行器，与 URDF ros2_control 的 7 个关节一一对应
+    - 惯性为占位值，按实际质量调整
+    - 关节暂未加 range 限位（云台飞转问题后续可用 <modify_element> 或在此加 range 解决）
+-->
+<mujoco model="sentry_robot">
+  <compiler angle="radian" coordinate="local"/>
+  <option timestep="0.002"/>
+
+  <worldbody>
+    <!-- ============ 底盘（原 base_link，含 freejoint 使其可在地面移动） ============ -->
+    <body name="base_link" pos="0 0 0.15">
+      <freejoint/>
+      <!-- 占位惯性：整体约 10kg 底盘（含电机电池），按需调整 -->
+      <inertial pos="0 0 0" mass="10" diaginertia="0.217 0.217 0.417"/>
+      <geom name="base" type="box" size="0.25 0.25 0.05" rgba="1 0 0 1"/>
+
+      <!-- 云台：bigyaw（绕 z） -->
+      <body name="bigyaw_link" pos="0 0 0.1">
+        <joint name="bigyaw_joint" axis="0 0 1"/>
+        <inertial pos="0 0 0" mass="1.0" diaginertia="0.011 0.011 0.02"/>
+        <geom name="bigyaw" type="cylinder" size="0.2 0.05" rgba="0 1 1 1"/>
+
+        <!-- 云台：small_yaw（绕 z） -->
+        <body name="small_yaw_link" pos="0 0 0.1">
+          <joint name="small_yaw_joint" axis="0 0 1"/>
+          <inertial pos="0 0 0" mass="0.2" diaginertia="0.0015 0.0015 0.0001"/>
+          <geom name="small_yaw" type="cylinder" size="0.03 0.15" rgba="0 0 1 1"/>
+
+          <!-- 云台：pitch（绕 y） -->
+          <body name="pitch_link" pos="0 0 0.25">
+            <joint name="pitch_joint" axis="0 1 0"/>
+            <inertial pos="0 0 0" mass="0.3" diaginertia="0.0021 0.0021 0.0004"/>
+            <geom name="pitch" type="cylinder" size="0.05 0.14" pos="0.14 0 0"
+                  quat="0.707105 0 0.707108 0" rgba="0 1 1 1"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- 四个麦轮（绕 y 轴，半径 0.1） -->
+      <body name="left_wheel_front_link" pos="-0.2 0.25 -0.05">
+        <joint name="left_wheel_front_joint" axis="0 1 0"/>
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.0017 0.0017 0.0025"/>
+        <geom name="left_wheel_front" type="cylinder" size="0.1 0.05"
+              quat="0.707105 0.707108 0 0" rgba="1 1 0 1"/>
+      </body>
+      <body name="right_wheel_front_link" pos="-0.2 -0.25 -0.05">
+        <joint name="right_wheel_front_joint" axis="0 1 0"/>
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.0017 0.0017 0.0025"/>
+        <geom name="right_wheel_front" type="cylinder" size="0.1 0.05"
+              quat="0.707105 0.707108 0 0" rgba="1 1 0 1"/>
+      </body>
+      <body name="left_wheel_back_link" pos="0.2 0.25 -0.05">
+        <joint name="left_wheel_back_joint" axis="0 1 0"/>
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.0017 0.0017 0.0025"/>
+        <geom name="left_wheel_back" type="cylinder" size="0.1 0.05"
+              quat="0.707105 0.707108 0 0" rgba="1 1 0 1"/>
+      </body>
+      <body name="right_wheel_back_link" pos="0.2 -0.25 -0.05">
+        <joint name="right_wheel_back_joint" axis="0 1 0"/>
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.0017 0.0017 0.0025"/>
+        <geom name="right_wheel_back" type="cylinder" size="0.1 0.05"
+              quat="0.707105 0.707108 0 0" rgba="1 1 0 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- ============ 执行器：全用 motor（力矩/effort 控制，对应你的 effort 指令链） ============
+       数量 = 7，与 URDF ros2_control 的 7 个关节一一对应；
+       ctrlrange 是力矩限幅（云台 ±10 N·m，轮子 ±30 N·m），按需调整。 -->
+  <actuator>
+    <motor name="bigyaw_motor"     joint="bigyaw_joint"          ctrlrange="-10 10"/>
+    <motor name="small_yaw_motor"  joint="small_yaw_joint"       ctrlrange="-10 10"/>
+    <motor name="pitch_motor"      joint="pitch_joint"           ctrlrange="-10 10"/>
+    <motor name="left_wheel_front_motor"  joint="left_wheel_front_joint"  ctrlrange="-30 30"/>
+    <motor name="right_wheel_front_motor" joint="right_wheel_front_joint" ctrlrange="-30 30"/>
+    <motor name="left_wheel_back_motor"   joint="left_wheel_back_joint"   ctrlrange="-30 30"/>
+    <motor name="right_wheel_back_motor"  joint="right_wheel_back_joint"  ctrlrange="-30 30"/>
+  </actuator>
+</mujoco>

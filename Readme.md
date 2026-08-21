@@ -106,10 +106,11 @@ sentry_code/
 |---|---|---|
 | `spr_hw_interface/SprHardwareInterface` | `real` | 真机 CAN（DJI + 达妙电机） |
 | `spr_hw_interface/EffortMockSystem` | `mock` | 轻量 effort 模拟硬件，无真机调试控制链路（默认） |
-| `spr_hw_interface/MujocoInterface` | `mujoco` | MuJoCo 物理仿真 |
+| `mujoco_ros2_control/MujocoSystemInterface` | `mujoco` | MuJoCo 物理仿真（成熟方案，自带原生窗口） |
 
 - **`EffortMockSystem`**：`read()` 按"实际被写入的命令接口"自动选择驱动（position → 低通跟随 / velocity → 速度跟随 / effort → 力矩驱动），命令接口未写入时保持 NaN。
-- **`MujocoInterface`**：加载 `spr_sentry_description/models/sentry.xml`，`read()` 用真实时钟时间补偿推进 `mj_step` 并回读 `qpos/qvel/qfrc_actuator`；`write()` 按 effort > velocity > position 优先级写 `data->ctrl` 并限幅到 `ctrlrange`。详见 §6.3。
+- **`MujocoSystemInterface`**（`mujoco_ros2_control` 提供）：MuJoCo 仿真独立进程 + 共享内存桥接 ros2_control，`mujoco_model` 参数指向场景文件，支持 `scene:=` 切换。详见 §6.3。
+- **`MujocoInterface`**（自研，保留备用）：早期无头实现（物理在接口内部），可用 `model_path` 指向 `models/sentry.xml`。
 
 ### 4.2 spr_sentry_description —— 机器人描述
 
@@ -212,22 +213,29 @@ ros2 topic echo /joint_states
 
 ---
 
-### 6.3 MuJoCo 物理仿真
+### 6.3 MuJoCo 物理仿真（mujoco_ros2_control 成熟方案）
 
-`MujocoInterface` 将 ros2_control 接入 MuJoCo 物理引擎，可在无真机时进行带动力学的仿真。
+采用社区成熟方案 `mujoco_ros2_control`：MuJoCo 仿真独立进程（内嵌原生 simulate 窗口），
+通过共享内存桥接 ros2_control，所有节点使用仿真时钟（`use_sim_time=true`）。
 
 ```bash
 cd sentry_code
-./run_sentry.sh mujoco
+./run_sentry.sh mujoco            # 默认平地场景 flat
+./run_sentry.sh mujoco rough      # 崎岖地形（hfield）
+./run_sentry.sh mujoco ramp       # 坡道
+./run_sentry.sh mujoco jump       # 飞坡
 ```
 
-- **仿真模型**：`src/spr_sentry_description/models/sentry.xml` —— 由 URDF 转换 + 手工补全
-  （7 个 `motor` 力矩执行器、底盘 `freejoint`、地面、占位惯性）。
-- **物理推进**：`model->opt.timestep = 0.002s`；`read()` 用真实时钟时间补偿，按需补 `mj_step` 步数。
-- **指令模式**：`write()` 支持 effort（力矩）/ velocity（速度伺服）/ position（位置 PD），
-  优先级 effort > velocity > position，力矩限幅到 `ctrlrange`。
-- **底盘驱动**：`base_link` 带 freejoint，发 `cmd_vel` 即可让四轮转动、车体在地面移动。
-- **修改模型**：改 `models/sentry.xml` 后重新 `colcon build --packages-select spr_sentry_description` 即可（models/ 随包安装）。
+- **模型组织**（机器人/场景解耦，`spr_sentry_description/models/`）：
+  - `sentry_robot.xml`：机器人本体（freejoint + 云台 + 4 轮 + 7 个 motor 力矩执行器）
+  - `scenes/{flat,rough,ramp,jump}.xml`：场景 = `<include>` 机器人 + 世界（地面/地形/灯光）
+- **场景切换**：`scene:=` 参数选场景文件，控制器/接口零改动；加新场景只需新增一个 xml。
+- **MuJoCo 窗口**：启动后自动弹出（可拖动视角 / 暂停 / 单步，提供 reset_world 等服务）。
+- **指令模式**：插件按 motor 执行器处理 effort 指令（position/velocity 需配 PID，见讨论文档）。
+- **修改模型**：改 `models/` 下文件后 `colcon build --packages-select spr_sentry_description`。
+
+> 注：mujoco 模式使用仿真时钟，若同时用 RViz 需开启 "Use Sim Time"。
+> 架构/决策细节见 `discussion/mujoco_disscus/mujoco可视化窗口选择.md`。
 
 ### 6.4 RVIZ 可视化调试（模拟硬件 / 假电机模式）
 
@@ -290,6 +298,7 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
 - [x] 达妙 MIT 协议（控制帧 / 回传帧编解码）
 - [x] 三种硬件后端（real / mock / mujoco）一键切换（`run_sentry.sh`）
 - [x] MuJoCo 接口 read/write（时间补偿 + 状态回读 + 指令写入）
+- [x] 迁移到 mujoco_ros2_control 成熟方案（原生窗口 + 场景可扩展 flat/rough/ramp/jump）
 - [ ] MuJoCo 模型惯性为占位值，需按实际质量调整
 - [ ] 云台 pitch 连续关节位置环会飞转（角度缠绕 / 饱和），需控制器调参
 - [ ] 接真机：核对达妙使能帧字节、映射满量程（pos/vel/tor_max）与调试助手一致
