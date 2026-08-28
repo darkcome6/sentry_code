@@ -17,16 +17,16 @@ gimbal_controller:
       scan_add: 0.001
       scan_range: [0.0, 0.0]
       pid:
-        p: 18.0
-        i: 0.25
-        d: 0.0
+        p: 1.0
+        i: 0.0
+        d: 0.03
         i_min: 0.0
         i_max: 0.0
         i_clamp_min: 0.0
         i_clamp_max: 0.0
         # 位置环输出限幅（电流/力矩原始值，DM4310 按实际力矩范围调小）
-        output_min: -30000.0
-        output_max: 30000.0
+        output_min: -3000.0
+        output_max: 3000.0
     small_yaw:
       joint: "small_yaw_joint"
       max: 1.57
@@ -34,9 +34,9 @@ gimbal_controller:
       scan_add: 0.001
       scan_range: [0.0, 0.0]
       pid:
-        p: 18.0
-        i: 0.15
-        d: 0.0
+        p: 3.0
+        i: 0.0
+        d: 0.3
         i_min: -1.0
         i_max: 1.0
         i_clamp_min: -1.0
@@ -51,9 +51,9 @@ gimbal_controller:
       scan_add: 0.001
       scan_range: [0.0, 0.0]
       pid:
-        p: 18.0
-        i: 0.15
-        d: 0.0
+        p: 8.0
+        i: 0.0
+        d: 0.3
         i_min: -1.0
         i_max: 1.0
         i_clamp_min: -1.0
@@ -70,40 +70,40 @@ chassis_controller:
     left_wheel_front:
       joint: "left_wheel_front_joint"
       pid:
-        p: 8.0
+        p: 0.8
         i: 0.0
         d: 0.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
-        output_min: -30000.0
-        output_max: 30000.0
+        output_min: -3000.0
+        output_max: 3000.0
     right_wheel_front:
       joint: "right_wheel_front_joint"
       pid:
-        p: 8.0
+        p: 0.8
         i: 0.0
         d: 0.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
-        output_min: -30000.0
-        output_max: 30000.0
+        output_min: -3000.0
+        output_max: 3000.0
     left_wheel_back:
       joint: "left_wheel_back_joint"
       pid:
-        p: 8.0
+        p: 0.8
         i: 0.0
         d: 0.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
-        output_min: -30000.0
-        output_max: 30000.0
+        output_min: -3000.0
+        output_max: 3000.0
     right_wheel_back:
       joint: "right_wheel_back_joint"
       pid:
-        p: 8.0
+        p: 0.8
         i: 0.0
         d: 0.0
         i_clamp_min: -1.0
         i_clamp_max: 1.0
-        output_min: -30000.0
-        output_max: 30000.0
+        output_min: -3000.0
+        output_max: 3000.0

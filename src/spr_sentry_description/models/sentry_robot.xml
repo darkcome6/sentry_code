@@ -18,22 +18,29 @@
   <option timestep="0.002"/>
 
   <worldbody>
-    <!-- ============ 底盘（原 base_link，含 freejoint 使其可在地面移动） ============ -->
+    <!-- ============ 底盘（原 base_link） ============
+         freejoint 不支持 damping（无法给 6DOF 浮动底盘加阻尼吸收晃动），
+         拆成 3 平动 + 1 偏航 的普通关节并全部加 damping：
+           - 保留 x/y/z 平动 + 绕 z 偏航（麦轮车移动所需）
+           - 锁死横滚/俯仰（贴地小车本就不该横滚/俯仰）→ 云台不再被底盘晃动喂能量 -->
     <body name="base_link" pos="0 0 0.15">
-      <freejoint/>
+      <joint name="base_x" type="slide" axis="1 0 0" damping="10"/>
+      <joint name="base_y" type="slide" axis="0 1 0" damping="10"/>
+      <joint name="base_z" type="slide" axis="0 0 1" damping="10"/>
+      <joint name="base_yaw" type="hinge" axis="0 0 1" damping="5"/>
       <!-- 占位惯性：整体约 10kg 底盘（含电机电池），按需调整 -->
       <inertial pos="0 0 0" mass="10" diaginertia="0.217 0.217 0.417"/>
       <geom name="base" type="box" size="0.25 0.25 0.05" rgba="1 0 0 1"/>
 
       <!-- 云台：bigyaw（绕 z） -->
       <body name="bigyaw_link" pos="0 0 0.1">
-        <joint name="bigyaw_joint" axis="0 0 1"/>
+        <joint name="bigyaw_joint" axis="0 0 1" damping="1.0"/>
         <inertial pos="0 0 0" mass="1.0" diaginertia="0.011 0.011 0.02"/>
         <geom name="bigyaw" type="cylinder" size="0.2 0.05" rgba="0 1 1 1"/>
 
         <!-- 云台：small_yaw（绕 z） -->
         <body name="small_yaw_link" pos="0 0 0.1">
-          <joint name="small_yaw_joint" axis="0 0 1"/>
+          <joint name="small_yaw_joint" axis="0 0 1" damping="0.5"/>
           <inertial pos="0 0 0" mass="0.2" diaginertia="0.0015 0.0015 0.0001"/>
           <geom name="small_yaw" type="cylinder" size="0.03 0.15" rgba="0 0 1 1"/>
 
