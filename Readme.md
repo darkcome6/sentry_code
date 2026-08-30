@@ -304,3 +304,35 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
 - [ ] 接真机：核对达妙使能帧字节、映射满量程（pos/vel/tor_max）与调试助手一致
 - [ ] `spr_msgs` 消息定义补全（视觉目标角速度字段，用于速度前馈）
 - [ ] IMU 加入后补充底盘角速度前馈（空间稳定）
+## 9.环境配置
+1. 中文 
+---
+sudo apt update
+---
+---
+sudo apt install ibus-pinyin
+
+---
+ibus-daemon -drx
+---
+只重启 GNOME Shell（按 Alt + F2，输入 r 并按回车）。
+2. URDF 模型快速验证工具
+---
+sudo apt install ros-${ROS_DISTRO}-urdf-tutorial
+---
+3. plotjunale 波形显示工具
+ros2 run plotjunale plotjunale
+4. ros2_control 包
+安装
+---
+sudo apt update
+sudo apt install ros-humble-ros2-control ros-humble-ros2-controllers
+---
+验证
+ros2 pkg list | grep controller_manager
+5. mujoco 
+# 安装 MuJoCo 的 ros2_control 插件
+sudo apt install ros-humble-mujoco-ros2-control
+6. can-utils 用来查看can信号
+sudo apt update
+sudo apt install can-utils
