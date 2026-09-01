@@ -92,11 +92,11 @@ chassis_controller:
       pid:
         p: 0.4
         i: 0.0
-        d: 0.0
+        d: 0.01
         i_clamp_min: -1.0
         i_clamp_max: 1.0
-        output_min: -3000.0
-        output_max: 3000.0
+        output_min: -3.0
+        output_max: 3.0
     right_wheel_back:
       joint: "right_wheel_back_joint"
       pid:
