@@ -9,7 +9,7 @@
         <xacro:if value="${'$(arg hardware_type)' == 'real'}">
             <hardware>
                 <plugin>spr_hw_interface/SprHardwareInterface</plugin>
-                <param name="can_device_count_">2</param>
+                <param name="can_device_count_">1</param>
             </hardware>
         </xacro:if>
         <xacro:if value="${'$(arg hardware_type)' == 'mock'}">
@@ -67,7 +67,7 @@ std::string motor_name;
         <joint name="small_yaw_joint">
             <param name="motor_name">small_yaw_motor</param>
             <param name="can_bus">can0</param>
-            <param name="tx_id">2</param>
+            <param name="tx_id">6</param>
             <param name="offset">0</param>
             <param name="motor_type">GM6020</param>
             <command_interface name="effort" />
@@ -114,8 +114,8 @@ std::string motor_name;
         </joint>
         <joint name="left_wheel_back_joint">
             <param name="motor_name">left_wheel_back_motor</param>
-            <param name="can_bus">can1</param>
-            <param name="tx_id">3</param>
+            <param name="can_bus">can0</param>
+            <param name="tx_id">5</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
             <command_interface name="effort" />

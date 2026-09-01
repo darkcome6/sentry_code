@@ -90,7 +90,7 @@ chassis_controller:
     left_wheel_back:
       joint: "left_wheel_back_joint"
       pid:
-        p: 0.8
+        p: 0.4
         i: 0.0
         d: 0.0
         i_clamp_min: -1.0

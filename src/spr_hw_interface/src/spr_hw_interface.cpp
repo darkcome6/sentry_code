@@ -386,10 +386,7 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
     //清空每个can设备的发送缓冲区,防止数据残留
     for (auto can_device : can_devices_)
   {
-    for (size_t i = 0; i < 3; i++)
-    {
-      can_device->tx_buff[i].fill(0);
-    }
+    can_device->tx_buff.clear();
   }
   //根据电机类型和命令接口，填充每个电机的发送缓冲区
   //1.从命令接口获取命令数值（position/velocity/effort）
@@ -420,34 +417,35 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
     switch (motor->config_.motor_type)
     {
       // ---------- DJI 电机：int16 电流帧，一帧带4个电机 ----------
+      // 分层约定：控制器统一输出力矩(N·m)，硬件层按电机类型做映射。
+      //   DJI 电机（M3508/GM6020/M2006）→ 电流模式：
+      //     满量程映射：tor_max(N·m) → I_MAX(电流给定满量程 16384)
       case M2006:
       case M3508:
       case GM6020:
       {
-        //命令为电流/电压原始值，直接转 int16 填入控制帧
-        motor->output = static_cast<int16_t>(command);
+        constexpr int16_t I_MAX = 16384;  // 大疆电机电流给定满量程
+        double torque = std::isnan(command) ? 0.0 : command;
+        double current = torque / motor->config_.tor_max * static_cast<double>(I_MAX);
+        if (current > I_MAX) current = I_MAX;
+        else if (current < -I_MAX) current = -I_MAX;
+        motor->output = static_cast<int16_t>(current);
         for (auto can_device : can_devices_)
         {
           if (motor->config_.can_bus == can_device->interface)
           {
-             /*根据电机的报文标识符选择发送缓冲区的索引 
-             一帧能和控制四个但是这四个电机的标识符必须一样
-              但是既可能是0x200也可能是0x1ff也可能是0X2ff
-             */
-            size_t buff_index = (motor->config_.identifier == 0x200) ? 0 :
-                                (motor->config_.identifier == 0x1ff) ? 1 :2;
-            
-            /*在这帧里的第几个字节大疆的电机一帧带四个电机的电流
+             /* 一帧带 4 个电机，组内槽位由 tx_id(已换算为组内 1~4) 决定：
                   组内槽位 tx_id	占据的字节位置	data_index
                       1	          字节 0、1	        0
                       2	          字节 2、3	        2
                       3	          字节 4、5	        4
                       4	          字节 6、7	        6
-            */
+                帧标识符 identifier：M3508/M2006 → 0x200/0x1FF，GM6020 → 0x1FE/0x2FE
+             */
             size_t data_index = (motor->config_.tx_id - 1) * 2;
 
-            can_device->tx_buff[buff_index][data_index] = motor->output >> 8;
-            can_device->tx_buff[buff_index][data_index + 1] = motor->output & 0xff;
+            can_device->tx_buff[motor->config_.identifier][data_index] = motor->output >> 8;
+            can_device->tx_buff[motor->config_.identifier][data_index + 1] = motor->output & 0xff;
 
             break;
           }
@@ -476,18 +474,12 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
         break;
     }
   }
+    // 按收集到的帧标识符逐一发送（支持 0x200/0x1FF(M3508) 与 0x1FE/0x2FE(GM6020)）
     for (auto can_device : can_devices_)
   {
-    for (size_t i = 0; i < 3; i++)
+    for (const auto& [frame_id, frame_data] : can_device->tx_buff)
     {
-      /*
-        条件	                 结果 id
-        i == 0                   成立	0x200
-                   不成立，且 i == 1 成立	0x1ff
-        以上都不成立（i == 2）	  0x2ff
-      */
-      auto id = (i == 0) ? 0x200 : (i == 1) ? 0x1ff : 0x2ff;
-      sendCanFrame(can_device, can_device->tx_buff[i].data(), 8, id);
+      sendCanFrame(can_device, frame_data.data(), frame_data.size(), frame_id);
     }
   }
   return hardware_interface::return_type::OK;
@@ -523,15 +515,16 @@ void SprHardwareInterface::configureMotorCan(std::shared_ptr<DJI_Motor> motor)
       }
       break;
     case GM6020:
+      // GM6020 专用协议：控制帧 0x1FE(电机1-4) / 0x2FE(电机5-7)，反馈 0x204+ID
       motor->config_.rx_id = 0x204 + motor->config_.tx_id;
       if (motor->config_.tx_id <= 4)
       {
-        motor->config_.identifier = 0x1ff;
+        motor->config_.identifier = 0x1fe;
       }
       else
       {
-        motor->config_.tx_id -= 4;//tx_id -= 4：把"全局电机号 5~8"换算成"该控制帧内的槽位 1~4"一帧带四个电机
-        motor->config_.identifier = 0x2ff;
+        motor->config_.tx_id -= 4;//tx_id -= 4：把"全局电机号 5~7"换算成"该控制帧内的槽位 1~3"
+        motor->config_.identifier = 0x2fe;
       }
       break;
     case DM4310:
