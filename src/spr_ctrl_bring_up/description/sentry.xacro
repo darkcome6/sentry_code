@@ -54,12 +54,12 @@ std::string motor_name;
             <param name="tx_id">1</param>
             <param name="offset">0</param>
             <param name="motor_type">DM6006</param>
-            <param name="pos_max">12.5</param>
+            <param name="pos_max">3.14</param>
             <param name="vel_max">30</param>
             <param name="tor_max">10</param>
+            <command_interface name="effort" />
             <command_interface name="position" />
             <command_interface name="velocity" />
-            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
             <state_interface name="effort" />
@@ -67,9 +67,12 @@ std::string motor_name;
         <joint name="small_yaw_joint">
             <param name="motor_name">small_yaw_motor</param>
             <param name="can_bus">can0</param>
-            <param name="tx_id">6</param>
-            <param name="offset">0</param>
-            <param name="motor_type">GM6020</param>
+            <param name="tx_id">5</param>
+            <param name="offset">-1.805</param>
+            <param name="motor_type">DM4310</param>
+            <param name="pos_max">3.14</param>
+            <param name="vel_max">30</param>
+            <param name="tor_max">10</param>
             <command_interface name="effort" />
             <command_interface name="position"/>
             <state_interface name="position" />
@@ -79,15 +82,15 @@ std::string motor_name;
         <joint name="pitch_joint">
             <param name="motor_name">pitch_motor</param>
             <param name="can_bus">can0</param>
-            <param name="tx_id">3</param>
-            <param name="offset">0</param>
+            <param name="tx_id">4</param>
+            <param name="offset">2.728</param>
             <param name="motor_type">DM4310</param>
-            <param name="pos_max">12.5</param>
+            <param name="pos_max">3.14</param>
             <param name="vel_max">30</param>
             <param name="tor_max">10</param>
+            <command_interface name="effort" />
             <command_interface name="position" />
             <command_interface name="velocity" />
-            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
             <state_interface name="effort" />
@@ -98,7 +101,8 @@ std::string motor_name;
             <param name="tx_id">1</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="effort" />
+            <param name="reduction">19.2032</param>
+            <param name="tor_max">3.0</param>            <param name="direction">-1</param>            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
@@ -108,27 +112,30 @@ std::string motor_name;
             <param name="tx_id">2</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="effort" />
+            <param name="reduction">19.2032</param>
+            <param name="tor_max">3.0</param>            <param name="direction">1</param>            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
         <joint name="left_wheel_back_joint">
             <param name="motor_name">left_wheel_back_motor</param>
-            <param name="can_bus">can0</param>
-            <param name="tx_id">5</param>
+            <param name="can_bus">can1</param>
+            <param name="tx_id">4</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="effort" />
+            <param name="reduction">19.2032</param>
+            <param name="tor_max">3.0</param>            <param name="direction">-1</param>            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
         <joint name="right_wheel_back_joint">
             <param name="motor_name">right_wheel_back_motor</param>
             <param name="can_bus">can1</param>
-            <param name="tx_id">4</param>
+            <param name="tx_id">3</param>
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
-            <command_interface name="effort" />
+            <param name="reduction">19.2032</param>
+            <param name="tor_max">3.0</param>            <param name="direction">1</param>            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>

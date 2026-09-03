@@ -1,10 +1,13 @@
 #include "spr_hw_interface.hpp"
 #include "spr_motor.hpp"
 
+#include <algorithm>//std::clamp
 #include <limits>//std::numeric_limits
 #include <string>
 #include <array>
 #include <cstring>
+#include <thread>//std::this_thread::sleep_for
+#include <chrono>//std::chrono::milliseconds
 
 #include <rclcpp/clock.hpp>   // rclcpp::Clock
 #include <rclcpp/time.hpp>    // rclcpp::Time
@@ -182,7 +185,11 @@ struct InterfaceInfo
         }
       }
       else if (key == "offset")
-        config.offset = std::stoi(value);
+        config.offset = std::stod(value);  // double：DM 的 offset 是 rad 小数(如 2.728)，勿用 stoi 截断
+      else if (key == "reduction")
+        config.reduction = std::stod(value);
+      else if (key == "direction")
+        config.direction = std::stod(value);
       else if (key == "pos_max")
         config.pos_max = std::stof(value);
       else if (key == "vel_max")
@@ -246,9 +253,16 @@ hardware_interface::CallbackReturn
 SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
    (void)previous_state;
-   // 达妙电机 MIT 模式上电默认失能，激活时发送使能帧
-   // TODO(真机确认): 使能字节按达妙调试助手/固件版本核对
-   const std::array<uint8_t, 8> dm_enable{ 0xFC, 0xFD, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+   // 达妙电机 MIT 模式上电默认失能，激活时发送使能帧。
+   // ⚠️ 达妙手册(2026-09-03 核对)：0xFB=清除错误 / 0xFC=使能 / 0xFD=失能。
+   //    电机报 0xD(通讯丢失)等故障(红灯闪烁)时，0xFC 会被忽略，必须先 0xFB 清错再
+   //    0xFC 使能。原误用 0xFE 当"复位"，手册无此命令，清不掉故障 → 一直红灯闪烁。
+   // 使能字节：0xFB=清除错误 / 0xFC=使能 / 0xFD=失能
+   const std::array<uint8_t, 8> dm_clear{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB };
+   const std::array<uint8_t, 8> dm_enable{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC };
+   constexpr int kClearAttempts = 3;     // 清错帧数
+   constexpr int kEnableAttempts = 20;   // 使能帧数（需 ~10+ 帧电机才可靠使能）
+   constexpr int kIntervalMs = 60;       // 帧间隔
    for (const auto& motor : motors_)
    {
      if (motor->config_.motor_type == DM6006 || motor->config_.motor_type == DM4310)
@@ -257,7 +271,18 @@ SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
        {
          if (motor->config_.can_bus == can_device->interface)
          {
-           sendCanFrame(can_device, dm_enable.data(), dm_enable.size(), motor->config_.tx_id);
+           // 1) 先清错（电机可能锁存在 0xD 通讯丢失等故障，0xFC 会被忽略）
+           for (int i = 0; i < kClearAttempts; ++i)
+           {
+             sendCanFrame(can_device, dm_clear.data(), dm_clear.size(), motor->config_.tx_id);
+             std::this_thread::sleep_for(std::chrono::milliseconds(kIntervalMs));
+           }
+           // 2) 再连续多次使能，确保电机可靠收到（单帧易丢/时机错过）
+           for (int i = 0; i < kEnableAttempts; ++i)
+           {
+             sendCanFrame(can_device, dm_enable.data(), dm_enable.size(), motor->config_.tx_id);
+             std::this_thread::sleep_for(std::chrono::milliseconds(kIntervalMs));
+           }
            break;
          }
        }
@@ -271,7 +296,24 @@ SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_stat
     (void)previous_state;
     try
   {
+    // 达妙电机 MIT 模式：先停力矩再发失能帧(0xFD)，使能/失能成对(on_activate 发 0xFC)
+    // 避免程序退出后电机仍保持使能状态无人控制
     stopMotors();
+    const std::array<uint8_t, 8> dm_disable{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD };
+    for (const auto& motor : motors_)
+    {
+      if (motor->config_.motor_type == DM6006 || motor->config_.motor_type == DM4310)
+      {
+        for (auto can_device : can_devices_)
+        {
+          if (motor->config_.can_bus == can_device->interface)
+          {
+            sendCanFrame(can_device, dm_disable.data(), dm_disable.size(), motor->config_.tx_id);
+            break;
+          }
+        }
+      }
+    }
     return hardware_interface::CallbackReturn::SUCCESS;
   }
   catch (const std::exception& e)
@@ -366,15 +408,17 @@ SprHardwareInterface::read(const rclcpp::Time& time, const rclcpp::Duration& per
       {
         // 达妙 MIT 回传帧解包（位置/速度/力矩线性映射还原）
         motor->decode_dm_feedback();
-        state_positions_[i] = motor->angle_current;
-        state_velocities_[i] = motor->measure.speed_aps;
-        state_currents_[i] = motor->measure.real_current;
+        // 镜像电机（direction=-1）：反馈方向取反，保证与命令方向一致（避免速度环正反馈）
+        state_positions_[i] = motor->angle_current * motor->config_.direction;
+        state_velocities_[i] = motor->measure.speed_aps * motor->config_.direction;
+        state_currents_[i] = motor->measure.real_current * motor->config_.direction;
         state_temperatures_[i] = motor->measure.temperature;
         continue;
       }
-      state_positions_[i] = motor->angle_current;
-      state_velocities_[i] = motor->measure.speed_aps;
-      state_currents_[i] = motor->measure.real_current;
+      // 镜像电机（direction=-1）：反馈方向取反，与命令方向一致
+      state_positions_[i] = motor->angle_current * motor->config_.direction;
+      state_velocities_[i] = motor->measure.speed_aps * motor->config_.direction;
+      state_currents_[i] = motor->measure.real_current * motor->config_.direction;
       state_temperatures_[i] = motor->measure.temperature;
   }
   return hardware_interface::return_type::OK;
@@ -390,26 +434,81 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
   }
   //根据电机类型和命令接口，填充每个电机的发送缓冲区
   //1.从命令接口获取命令数值（position/velocity/effort）
+  //⚠️ 修复(2026-09-02)：本硬件是"力矩输出"架构（gimbal/chassis 控制器都写 effort）。
+  //   旧实现只看 command_interfaces[0]，而 xacro 里 pitch/bigyaw(DM) 把 position 声明在
+  //   第一位 → write() 误读恒为 0 的 cmd_positions_，导致 DM 电机一直收到 0 力矩。
+  //   现在改为：关节声明了 effort 命令接口就直接取 cmd_efforts_（不依赖声明顺序）；
+  //   未声明 effort 的关节再回退到"第一个命令接口"的旧逻辑。
   for (size_t i = 0; i < joint_count; i++)
   {
     double command = 0.0;
-    const std::string& iface_name = info_.joints[i].command_interfaces[0].name;
-    if (iface_name == "position" && !std::isnan(cmd_positions_[i]))
+    bool has_effort_cmd = false;
+    for (const auto& ci : info_.joints[i].command_interfaces)
     {
-      command = cmd_positions_[i];
+      if (ci.name == "effort")
+      {
+        has_effort_cmd = true;
+        break;
+      }
     }
-    else if (iface_name == "velocity" && !std::isnan(cmd_velocities_[i]))
-    {
-      command = cmd_velocities_[i];
-    }
-    else if (iface_name == "effort" && !std::isnan(cmd_efforts_[i]))
+    if (has_effort_cmd && !std::isnan(cmd_efforts_[i]))
     {
       command = cmd_efforts_[i];
     }
+    else
+    {
+      const std::string& iface_name = info_.joints[i].command_interfaces[0].name;
+      if (iface_name == "position" && !std::isnan(cmd_positions_[i]))
+      {
+        command = cmd_positions_[i];
+      }
+      else if (iface_name == "velocity" && !std::isnan(cmd_velocities_[i]))
+      {
+        command = cmd_velocities_[i];
+      }
+      else if (iface_name == "effort" && !std::isnan(cmd_efforts_[i]))
+      {
+        command = cmd_efforts_[i];
+      }
+    }
 
     auto motor = motors_[i];
-    //电机失联或虚拟关节则跳过
-    if (!motor->check_connection(time))
+    const bool is_dm = (motor->config_.motor_type == DM6006 ||
+                        motor->config_.motor_type == DM4310);
+    const bool connected = motor->check_connection(time);
+
+    // ── 达妙使能自愈（放在失联 continue 之前！）────────────────────────
+    // ⚠️ 失联(如 0xD 通讯丢失后电机不回帧→MOTOR_LOST)时若先 continue 就永远不会
+    //    再补发 0xFC → 电机永远红灯(死锁)。故对所有 DM(无论是否失联)，只要未确认
+    //    使能(err!=1 或失联)就周期性(100ms)补发 0xFC；故障态(err!=0)先 0xFB 清错。
+    if (is_dm)
+    {
+      static const std::array<uint8_t, 8> dm_clear{
+          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB };
+      static const std::array<uint8_t, 8> dm_enable{
+          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC };
+      const bool need_enable = (motor->dm_err_ != 1) || !connected;
+      if (need_enable && (time - motor->last_enable_sent_).seconds() > 0.1)
+      {
+        for (auto can_device : can_devices_)
+        {
+          if (motor->config_.can_bus == can_device->interface)
+          {
+            if (motor->dm_err_ != 0)
+            {
+              // 故障态：先 0xFB 清错，否则 0xFC 使能被忽略
+              sendCanFrame(can_device, dm_clear.data(), dm_clear.size(), motor->config_.tx_id);
+            }
+            sendCanFrame(can_device, dm_enable.data(), dm_enable.size(), motor->config_.tx_id);
+            motor->last_enable_sent_ = time;
+            break;
+          }
+        }
+      }
+    }
+
+    //电机失联或虚拟关节则跳过（不发控制帧；上面已尝试补使能唤醒）
+    if (!connected)
     {
       continue;
     }
@@ -425,7 +524,8 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
       case GM6020:
       {
         constexpr int16_t I_MAX = 16384;  // 大疆电机电流给定满量程
-        double torque = std::isnan(command) ? 0.0 : command;
+        // 转向方向：镜像电机（direction=-1）命令取反，与反馈取反保持一致
+        double torque = (std::isnan(command) ? 0.0 : command) * motor->config_.direction;
         double current = torque / motor->config_.tor_max * static_cast<double>(I_MAX);
         if (current > I_MAX) current = I_MAX;
         else if (current < -I_MAX) current = -I_MAX;
@@ -456,10 +556,15 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
       case DM6006:
       case DM4310:
       {
+        //（使能自愈已上移到 write() 顶部、失联 continue 之前，这里只发控制帧）
         //命令为力矩(N·m)，按 MIT 帧 12 位线性映射打包，帧ID = 电机 CAN ID
+        //⚠️ 量纲/溢出保护：t_ff 只有 12bit、满量程 ±tor_max，控制器输出一旦超出
+        //   (如位置环输出几百 N·m) 会在 float_to_uint 里溢出回绕成错误值 → 先限幅
+        const float tor_max = motor->config_.tor_max;
+        const float t_cmd = std::clamp(
+            static_cast<float>(command * motor->config_.direction), -tor_max, tor_max);
         std::array<uint8_t, 8> dm_frame{ 0 };
-        DJI_Motor::encode_mit_frame(dm_frame, 0.0f, 0.0f, 0.0f, 0.0f,
-                                    static_cast<float>(command), motor->config_);
+        DJI_Motor::encode_mit_frame(dm_frame, 0.0f, 0.0f, 0.0f, 0.0f, t_cmd, motor->config_);
         for (auto can_device : can_devices_)
         {
           if (motor->config_.can_bus == can_device->interface)
@@ -528,10 +633,10 @@ void SprHardwareInterface::configureMotorCan(std::shared_ptr<DJI_Motor> motor)
       }
       break;
     case DM4310:
-      motor->config_.rx_id = 0x100 + motor->config_.tx_id;
+      motor->config_.rx_id = 0x50 + motor->config_.tx_id;
       break;
     case DM6006:
-      motor->config_.rx_id = 0x100 + motor->config_.tx_id;
+      motor->config_.rx_id = 0x50 + motor->config_.tx_id;
       break;
     default:
       return;

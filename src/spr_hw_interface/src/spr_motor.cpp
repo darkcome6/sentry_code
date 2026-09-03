@@ -15,9 +15,11 @@ void DJI_Motor::decode_feedback()
   measure.last_ecd = measure.ecd;
   measure.ecd = rx_buff[0] << 8 | rx_buff[1];
 //低通滤波     y[n]=(1−α)⋅y[n−1]+α⋅x[n]
+  // 反馈转速为电机转子 rpm → act2vel 得转子 rad/s；除以减速比折成输出轴 rad/s（与逆运动学目标对齐）
   measure.speed_aps =
-      (1.0f - SPEED_SMOOTH_COEF) * measure.speed_aps +
-      act2vel * SPEED_SMOOTH_COEF * (double)((int16_t)(rx_buff[2] << 8 | rx_buff[3]));
+      ((1.0f - SPEED_SMOOTH_COEF) * measure.speed_aps +
+       act2vel * SPEED_SMOOTH_COEF * (double)((int16_t)(rx_buff[2] << 8 | rx_buff[3]))) /
+      config_.reduction;
   measure.real_current = (1.0f - CURRENT_SMOOTH_COEF) * measure.real_current +
                          CURRENT_SMOOTH_COEF * (double)((int16_t)(rx_buff[4] << 8 | rx_buff[5]));
   
@@ -66,20 +68,23 @@ bool DJI_Motor::check_connection(const rclcpp::Time& current_time)
 }
 
 // ========== 达妙 MIT 协议 ==========
-// 浮点 -> 定点（文档 float_to_uint）
+// ⚠️ scale 必须用 (1<<bits)-1（MIT 官方 / 电机固件刻度）。
+//    旧实现误用 (1<<(bits-1))-1：t=0 会打包成 1023 而非中点 2048，
+//    电机端按 4095 刻度解出 -50% 满量程力矩 → 电机 t=0 仍被持续驱动自转
+// 浮点 -> 定点（MIT float_to_uint）
 int DJI_Motor::float_to_uint(float x, float x_min, float x_max, int bits)
 {
   const float span = x_max - x_min;
   const float offset = x_min;
-  const float scale = static_cast<float>((1 << (bits - 1)) - 1);
+  const float scale = static_cast<float>((1 << bits) - 1);
   return static_cast<int>((x - offset) * scale / span);
 }
-// 定点 -> 浮点（文档 uint_to_float）
+// 定点 -> 浮点（MIT uint_to_float）
 float DJI_Motor::uint_to_float(int x_int, float x_min, float x_max, int bits)
 {
   const float span = x_max - x_min;
   const float offset = x_min;
-  const float scale = static_cast<float>((1 << (bits - 1)) - 1);
+  const float scale = static_cast<float>((1 << bits) - 1);
   return static_cast<float>(x_int) * span / scale + offset;
 }
 
@@ -115,20 +120,35 @@ void DJI_Motor::encode_mit_frame(std::array<uint8_t, 8>& frame,
 }
 
 // 解包达妙 MIT 回传帧（8字节）
-// 布局：D0=MST_ID D1=ID<<4|ERR D2=POS[15:8] D3=POS[7:0]
-//       D4=VEL[11:4] D5=VEL[3:0]|T[11:8] D6=T[7:0] D7=T_MOS
+// ⚠️ 真机核对修正(2026-09-02)：布局以用户下位机 get_da_motor_measure 为准
+//   D0:      [7:4]=err  [3:0]=id(从站号)
+//   D1D2:    位置 16bit 有符号(D1高8/D2低8)，中心 0 对应 0 rad → ±pos_max
+//   D3D4[7:4]: 速度 12bit → ±vel_max
+//   D4[3:0]D5: 力矩 12bit → ±tor_max
+//   D6: MOS温度   D7: 线圈温度
+//   旧实现把回传当命令帧布局解 → 整体错位一字节 → 位置/速度乱跳(假 error_dot)
 void DJI_Motor::decode_dm_feedback()
 {
-  dm_err_ = rx_buff[1] & 0x0F;  // 低4位为状态
-  const uint16_t pos_int = static_cast<uint16_t>((rx_buff[2] << 8) | rx_buff[3]);
-  const uint16_t vel_int = static_cast<uint16_t>(
-    (rx_buff[4] << 4) | ((rx_buff[5] >> 4) & 0x0F));
-  const uint16_t tor_int = static_cast<uint16_t>(
-    ((rx_buff[5] & 0x0F) << 8) | rx_buff[6]);
+  dm_id_ = rx_buff[0] & 0x0F;
+  dm_err_ = rx_buff[0] >> 4;
 
-  dm_position_ = uint_to_float(pos_int, -config_.pos_max, config_.pos_max, 16);
-  dm_velocity_ = uint_to_float(vel_int, -config_.vel_max, config_.vel_max, 12);
-  dm_torque_ = uint_to_float(tor_int, -config_.tor_max, config_.tor_max, 12);
+  const int16_t ecd = static_cast<int16_t>((rx_buff[1] << 8) | rx_buff[2]);
+  // 软件零点偏移（config_.offset，单位 rad）：把机械中值对应的电机原始位置读到 0。
+  // ⚠️ 曾缺失：DM 解码路径没用 offset → xacro 里 offset=2.728 无效，软件 0 仍对电机 3.14
+  // 软件零点偏移(rad)：位置 = 原始 - offset。DM 单圈 ±π 时 +π/-π 是同一物理点(wrap)，
+  // 减 offset 后可能越过 ±π 边界(如 -3.14-3.14=-6.28)，必须 wrap 回 (-π, π]，
+  // 否则位置环看到超界假位置 → 猛打红灯。
+  dm_position_ = static_cast<double>(ecd) * config_.pos_max / 32768.0 - config_.offset;
+  while (dm_position_ > M_PI) dm_position_ -= 2.0 * M_PI;
+  while (dm_position_ <= -M_PI) dm_position_ += 2.0 * M_PI;
+
+  const uint16_t v_int = static_cast<uint16_t>((rx_buff[3] << 4) | (rx_buff[4] >> 4));
+  dm_velocity_ = uint_to_float(v_int, -config_.vel_max, config_.vel_max, 12);
+
+  const uint16_t t_int = static_cast<uint16_t>(((rx_buff[4] & 0x0F) << 8) | rx_buff[5]);
+  dm_torque_ = uint_to_float(t_int, -config_.tor_max, config_.tor_max, 12);
+
+  measure.temperature = rx_buff[6];  // MOS 温度
 
   // 同步到统一的状态变量（state 接口直接读取）
   measure.total_angle = dm_position_;

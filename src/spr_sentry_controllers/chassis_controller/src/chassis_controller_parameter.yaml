@@ -15,6 +15,14 @@ spr_chassis_controller:
     default_value: 0.076,
     description: "轮半径 (m)"
   }
+  # 麦克纳姆轮布置方向：辊子倾斜方向决定横移/旋转符号。
+  #   x_type_a: 代码默认公式（LF/RB 辊子 "/"、RF/LB 辊子 "\\"）
+  #   x_type_b: 镜像（LF/RB 辊子 "\\"、RF/LB 辊子 "/"），vy/wz 符号取反
+  wheel_layout: {
+    type: string,
+    default_value: "x_type_a",
+    description: "Mecanum wheel roller layout: x_type_a or x_type_b"
+  }
   left_wheel_front:
     joint: {
       type: string,

@@ -204,10 +204,17 @@ std::array<double, 4> ChassisController::inverse_kinematics(double vx, double vy
     RCLCPP_WARN(get_node()->get_logger(), "wheel_radius must be > 0, got %.4f", R);
     return { 0.0, 0.0, 0.0, 0.0 };
   }
+  // 真机坐标系：炮管(车头)在模型 -X 方向，且模型左/右轮与真机相反
+  //（真机左前轮=left_wheel_front 电机实际在模型 -Y 处）。
+  // 只对 vx 取反（使 W=朝炮管前进）；vy 由 FK 输出取反校正横向；
+  // wz 不再取反，使 Q=逆时针(左转)、E=顺时针(右转)，与遥控语义一致。
+  vx = -vx;
   const double half = (L + W) / 2.0;
+  // 真机辊子布置与标准 X 假设相差一个“横移↔旋转互换”（真机把横移轮花样转成旋转）。
+  // 将左前/右前轮目标互换以校正（等价于轮位交叉补偿），使 A/D 真机横移、Q/E 真机旋转。
   return {
-    ( vx - vy - half * wz) / R,   // 左前轮
-    ( vx + vy + half * wz) / R,   // 右前轮
+    ( vx + vy + half * wz) / R,   // 左前轮（与右前互换）
+    ( vx - vy - half * wz) / R,   // 右前轮
     ( vx - vy + half * wz) / R,   // 左后轮
     ( vx + vy - half * wz) / R,   // 右后轮
   };
@@ -219,12 +226,15 @@ std::array<double, 4> ChassisController::forward_kinematics(
 {
   const double R = params_.wheel_radius;
   const double k = (params_.wheel_base + params_.track_width) / 2.0;
-  return {
-    R / 4.0 * ( w[0] + w[1] + w[2] + w[3] ),              // vx
-    R / 4.0 * (-w[0] + w[1] - w[2] + w[3] ),              // vy
-    R / (4.0 * k) * (-w[0] + w[1] + w[2] - w[3] ),        // wz
+  auto v = std::array<double, 4>{
+    R / 4.0 * ( w[1] + w[0] + w[2] + w[3] ),              // vx
+    R / 4.0 * (-w[1] + w[0] - w[2] + w[3] ),              // vy
+    R / (4.0 * k) * (-w[1] + w[0] + w[2] - w[3] ),        // wz
     0.0
   };
+  // 真机横向(vy)辊子方向与标准公式相反：对里程计 vy 取反，使 RViz 横移方向与真机一致。
+  v[1] = -v[1];
+  return v;
 }
 
 // 由轮速反馈积分里程计位姿，并发布 odom -> base_footprint TF
