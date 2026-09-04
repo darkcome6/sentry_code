@@ -18,7 +18,6 @@
 
 namespace spr_hw_interface
 {
-// socket_can 库源自 tide_hw_interface 项目，这里将其类型引入当前命名空间，
 // 以便本命名空间内直接使用 SocketCanSender 等类型
 using spr_hw_interface::CanId;
 using spr_hw_interface::FrameType;
@@ -41,10 +40,7 @@ public:
   std::shared_ptr<std::thread> receiver_thread;//接收线程
   std::shared_ptr<std::atomic<bool>> thread_running;//线程运行标志
   std::map<uint32_t, std::array<uint8_t, 8>> tx_buff{};//发送缓冲区：帧标识符 -> 8字节数据
-  /* 按 CAN 帧标识符(identifier)收集，一帧带 4 个电机：
-       M3508/M2006: 0x200(电机1-4) / 0x1FF(电机5-8)
-       GM6020:      0x1FE(电机1-4) / 0x2FE(电机5-7)
-  */
+
 private:
   void receiveLoop();
   ReceiveCallback receive_callback_;

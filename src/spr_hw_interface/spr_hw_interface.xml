@@ -14,11 +14,4 @@
       Lightweight effort mock hardware for debugging the position->effort chain.
     </description>
   </class>
-  <class name="spr_hw_interface/MujocoInterface"
-         type="spr_hw_interface::MujocoInterface"
-         base_class_type="hardware_interface::SystemInterface">
-    <description>
-      MuJoCo physics simulation hardware interface.
-    </description>
-  </class>
 </library>

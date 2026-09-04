@@ -57,11 +57,9 @@ sentry_code/
 ├── discussion/                 # 设计讨论文档（COLCON_IGNORE，不参与构建）
 └── src/
     ├── spr_msgs/                      # 自定义消息（GimbalCmd / GimbalState）
-    ├── spr_hw_interface/              # 硬件接口：真机 CAN + EffortMockSystem + MujocoInterface
-    │   ├── include/mujoco_sim_interface.hpp
-    │   └── src/mujoco_sim_interface.cpp
+    ├── spr_hw_interface/              # 硬件接口：真机 CAN + EffortMockSystem
     ├── spr_sentry_description/        # 哨兵 URDF/Xacro 模型 + MuJoCo 模型
-    │   └── models/sentry.xml          # MuJoCo 仿真模型（URDF 转换 + 手工补全）
+    │   └── models/                    # MuJoCo：sentry_robot.xml 本体 + scenes/*.xml 场景
     ├── spr_sentry_controllers/
     │   └── gimbal_controller/         # 云台控制器
     └── spr_ctrl_bring_up/             # 启动与配置
@@ -110,7 +108,6 @@ sentry_code/
 
 - **`EffortMockSystem`**：`read()` 按"实际被写入的命令接口"自动选择驱动（position → 低通跟随 / velocity → 速度跟随 / effort → 力矩驱动），命令接口未写入时保持 NaN。
 - **`MujocoSystemInterface`**（`mujoco_ros2_control` 提供）：MuJoCo 仿真独立进程 + 共享内存桥接 ros2_control，`mujoco_model` 参数指向场景文件，支持 `scene:=` 切换。详见 §6.3。
-- **`MujocoInterface`**（自研，保留备用）：早期无头实现（物理在接口内部），可用 `model_path` 指向 `models/sentry.xml`。
 
 ### 4.2 spr_sentry_description —— 机器人描述
 
@@ -286,7 +283,7 @@ rviz2 -d $(ros2 pkg prefix spr_ctrl_bring_up)/share/spr_ctrl_bring_up/config/rvi
 - `realtime_tools`（双缓冲 / 实时发布器）
 - `generate_parameter_library`（参数代码生成）
 - `pluginlib`
-- `mujoco_vendor`（仅 `mujoco` 模式需要：`sudo apt install ros-humble-mujoco-vendor`）
+- `mujoco_ros2_control`（仅 `mujoco` 模式需要：`sudo apt install ros-humble-mujoco-ros2-control`，随附 `mujoco_vendor`）
 - `spr_msgs`（自定义消息包）
 
 ---

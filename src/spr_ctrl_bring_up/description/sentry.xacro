@@ -30,24 +30,33 @@
             </hardware>
         </xacro:if>
 <!--
-std::string motor_name;
+typedef struct
+{
+  std::string motor_name;
   std::string can_bus;
   uint32_t tx_id;
   uint32_t rx_id;
   uint32_t identifier;//报文标识符
-  uint16_t offset;//电机编码器零点偏移
+  double offset{ 0.0 };  // 软件零点偏移：达妙(DM) 为 rad（位置反馈直接减，须支持小数）；DJI 为编码器 ticks(整数)
   Motor_Type_e motor_type;
+  double reduction{ 1.0 };  // 减速比（电机轴/输出轴）：M3508≈19.2(3591/187)、M2006=36，无减速箱为 1
+  double direction{ 1.0 };  // 转向系数：电机镜像安装时配 -1（命令/反馈同时取反），左右对称底盘右侧轮通常为 -1
+  // 达妙电机 MIT 线性映射满量程（由达妙调试助手设定，发送/接收必须一致）
+  float pos_max{ 3.14f };   // 位置 ±rad（DM 单圈默认 ±π，多圈需按调试助手 PMAX 覆写）
+  float vel_max{ 30.0f };   // 速度 ±rad/s
+  float tor_max{ 10.0f };   // 扭矩 ±N·m
+} Motor_Config_t;
 
-  typedef enum
-    {
-        MOTOR_TYPE_NONE = 0,
-        DM6006,
-        DM4310,
-        GM6020,
-        M3508,
-        M2006,
-        VIRTUAL_JOINT,
-    } Motor_Type_e;-->
+typedef enum
+ {
+  MOTOR_TYPE_NONE = 0,
+  DM6006,
+  DM4310,
+  GM6020,
+  M3508,
+  M2006,
+  VIRTUAL_JOINT,
+ } Motor_Type_e;-->
         <joint name="bigyaw_joint">
             <param name="motor_name">bigyaw_motor</param>
             <param name="can_bus">can0</param>
@@ -102,7 +111,9 @@ std::string motor_name;
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
             <param name="reduction">19.2032</param>
-            <param name="tor_max">3.0</param>            <param name="direction">-1</param>            <command_interface name="effort" />
+            <param name="tor_max">3.0</param>            
+            <param name="direction">-1</param>            
+            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
@@ -113,7 +124,9 @@ std::string motor_name;
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
             <param name="reduction">19.2032</param>
-            <param name="tor_max">3.0</param>            <param name="direction">1</param>            <command_interface name="effort" />
+            <param name="tor_max">3.0</param>            
+            <param name="direction">1</param>            
+            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
@@ -124,7 +137,9 @@ std::string motor_name;
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
             <param name="reduction">19.2032</param>
-            <param name="tor_max">3.0</param>            <param name="direction">-1</param>            <command_interface name="effort" />
+            <param name="tor_max">3.0</param>            
+            <param name="direction">-1</param>            
+            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>
@@ -135,7 +150,9 @@ std::string motor_name;
             <param name="offset">0</param>
             <param name="motor_type">M3508</param>
             <param name="reduction">19.2032</param>
-            <param name="tor_max">3.0</param>            <param name="direction">1</param>            <command_interface name="effort" />
+            <param name="tor_max">3.0</param>            
+            <param name="direction">1</param>            
+            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>

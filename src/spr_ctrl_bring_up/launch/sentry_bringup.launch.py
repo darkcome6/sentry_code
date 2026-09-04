@@ -20,6 +20,10 @@ def launch_setup(context, *args, **kwargs):
     # 通过 xacro 生成 robot_description（解析 $(find ...) 与 hardware_type / scene 参数）
     robot_description_content = Command(
         ['xacro ', xacro_file, ' hardware_type:=', hardware_type, ' scene:=', scene])
+# Command 执行后，会捕获 xacro 命令打印到标准输出（stdout）的完整URDF模型字符串（即所有 <link>、<joint> 标签的XML文本）
+# 将这个字符串放入以 'robot_description' 为键的字典中，是ROS 2生态的硬性标准。
+# 因为 robot_state_publisher 节点或 spawn_entity（Gazebo加载模型）节点，
+# 它们的 parameters 或 arguments 就固定要求接收这个键名的参数。
     robot_description = {'robot_description': robot_description_content}
 
     # ---- 控制器管理节点 ----
@@ -39,6 +43,7 @@ def launch_setup(context, *args, **kwargs):
             on_exit=Shutdown(),
         )
     else:
+# 启动控制器管理器，并传入参数文件（相关的控制器及其参数）
         sim_time = use_sim_time
         control_node = Node(
             package='controller_manager',
@@ -46,7 +51,7 @@ def launch_setup(context, *args, **kwargs):
             parameters=[robot_description, params_file, {'use_sim_time': use_sim_time}],
             output='screen',
         )
-
+# 用于向控制器管理器发布服务请求（激活对应的控制器）
     def spawn(controller):
         return Node(
             package='controller_manager',
