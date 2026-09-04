@@ -151,8 +151,7 @@ typedef enum
             <param name="motor_type">M3508</param>
             <param name="reduction">19.2032</param>
             <param name="tor_max">3.0</param>            
-            <param name="direction">1</param>            
-            <command_interface name="effort" />
+            <param name="direction">1</param>            <command_interface name="effort" />
             <state_interface name="position" />
             <state_interface name="velocity" />
         </joint>

@@ -31,13 +31,6 @@ typedef enum
   MOTOR_ACTIVE,
 } Motor_Status_e;
 
-typedef enum
-{
-  OPEN_LOOP = 0,
-  SPEED_LOOP,
-  POSITION_LOOP,
-} Motor_CloseMode_e;
-
 typedef struct
 {
   std::string motor_name;
@@ -60,21 +53,21 @@ class DJI_Motor
 public:
   struct Measure
   {
-    uint16_t last_ecd{ 0 };
-    uint16_t ecd{ 0 };
-    double speed_aps{ 0.0 };
-    int16_t real_current{ 0 };
-    uint8_t temperature{ 0 };
-    double total_angle{ 0.0 };
-    int32_t total_round{ 0 };
+    uint16_t last_ecd{ 0 };//上一次的ECD
+    uint16_t ecd{ 0 };//这一次的ECD
+    double speed_aps{ 0.0 };//速度的
+    int16_t real_current{ 0 };//电流大小
+    uint8_t temperature{ 0 };//温度
+    double total_angle{ 0.0 };//总角度
+    int32_t total_round{ 0 };//总圈数
     Measure() = default;
   };
-  Motor_Status_e status = MOTOR_LOST;
-  Motor_Config_t config_;
-  Measure measure;
-  std::array<uint8_t, 8> rx_buff = { 0 };
-  int16_t output = 0;
-  double angle_current = 0.0;
+  Motor_Status_e status = MOTOR_LOST;//电机的上线状态
+  Motor_Config_t config_;//电机的属性配置
+  Measure measure;//电机的数值参数
+  std::array<uint8_t, 8> rx_buff = { 0 };//电机的can缓存区
+  int16_t output = 0;//输出
+  double angle_current = 0.0;//当前角度
 
   // 达妙 MIT 反馈（经线性映射还原的物理量）
   double dm_position_{ 0.0 };  // rad
@@ -84,7 +77,7 @@ public:
   uint8_t dm_err_{ 0 };        // 状态(0失能/1使能/3制动/...)
   rclcpp::Time last_enable_sent_{ 0, 0, RCL_ROS_TIME };  // write() 周期性补发 0xFC 的上次时间
 
-  DJI_Motor(const Motor_Config_t& config);
+  DJI_Motor(const Motor_Config_t& config);//构造函数
   void decode_feedback();       // 大疆编码器格式解包
   void decode_dm_feedback();    // 达妙 MIT 回传帧解包
   void stop() { output = 0; }
@@ -96,8 +89,9 @@ public:
   static void encode_mit_frame(std::array<uint8_t, 8>& frame,
                                float p, float v, float kp, float kd, float t,
                                const Motor_Config_t& cfg);
-
+  //检查电机的连接状态
   bool check_connection(const rclcpp::Time& current_time);
+  //更新时间
   void update_timestamp(const rclcpp::Time& time) { last_comm_time_ = time; }
 
 private:

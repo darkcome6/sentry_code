@@ -7,7 +7,7 @@
   并在其 worldbody 里追加地面 / 地形 / 障碍。
 
   说明：
-    - 由 sentry.urdf.xacro 转换 + 手工补全（actuator、freejoint、惯性）
+    - 由 sentry.urdf.xacro 转换（MuJoCo 官方 mujoco_urdf 转换器） + 手工补全（actuator、freejoint、惯性）
     - 底盘 base_link 带 freejoint（6DOF 浮动），可在地形上移动
     - 7 个 motor 力矩执行器，与 URDF ros2_control 的 7 个关节一一对应
     - 惯性为占位值，按实际质量调整

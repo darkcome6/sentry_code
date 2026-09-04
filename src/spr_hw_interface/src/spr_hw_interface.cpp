@@ -185,7 +185,7 @@ struct InterfaceInfo
         }
       }
       else if (key == "offset")
-        config.offset = std::stod(value);  // double：DM 的 offset 是 rad 小数(如 2.728)，勿用 stoi 截断
+        config.offset = std::stod(value);  
       else if (key == "reduction")
         config.reduction = std::stod(value);
       else if (key == "direction")
@@ -254,10 +254,8 @@ SprHardwareInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
    (void)previous_state;
    // 达妙电机 MIT 模式上电默认失能，激活时发送使能帧。
-   // ⚠️ 达妙手册(2026-09-03 核对)：0xFB=清除错误 / 0xFC=使能 / 0xFD=失能。
-   //    电机报 0xD(通讯丢失)等故障(红灯闪烁)时，0xFC 会被忽略，必须先 0xFB 清错再
-   //    0xFC 使能。原误用 0xFE 当"复位"，手册无此命令，清不掉故障 → 一直红灯闪烁。
-   // 使能字节：0xFB=清除错误 / 0xFC=使能 / 0xFD=失能
+   // 达妙手册：0xFB=清除错误 / 0xFC=使能 / 0xFD=失能。
+   // 电机报 0xD(通讯丢失)等故障(红灯闪烁)时，0xFC 会被忽略，必须先 0xFB 清错再
    const std::array<uint8_t, 8> dm_clear{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB };
    const std::array<uint8_t, 8> dm_enable{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC };
    constexpr int kClearAttempts = 3;     // 清错帧数
@@ -296,7 +294,7 @@ SprHardwareInterface::on_deactivate(const rclcpp_lifecycle::State& previous_stat
     (void)previous_state;
     try
   {
-    // 达妙电机 MIT 模式：先停力矩再发失能帧(0xFD)，使能/失能成对(on_activate 发 0xFC)
+    // 达妙电机 MIT 模式：先停力矩再发失能帧(0xFD)
     // 避免程序退出后电机仍保持使能状态无人控制
     stopMotors();
     const std::array<uint8_t, 8> dm_disable{ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD };
@@ -434,9 +432,6 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
   }
   //根据电机类型和命令接口，填充每个电机的发送缓冲区
   //1.从命令接口获取命令数值（position/velocity/effort）
-  //⚠️ 修复(2026-09-02)：本硬件是"力矩输出"架构（gimbal/chassis 控制器都写 effort）。
-  //   旧实现只看 command_interfaces[0]，而 xacro 里 pitch/bigyaw(DM) 把 position 声明在
-  //   第一位 → write() 误读恒为 0 的 cmd_positions_，导致 DM 电机一直收到 0 力矩。
   //   现在改为：关节声明了 effort 命令接口就直接取 cmd_efforts_（不依赖声明顺序）；
   //   未声明 effort 的关节再回退到"第一个命令接口"的旧逻辑。
   for (size_t i = 0; i < joint_count; i++)
@@ -476,11 +471,7 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
     const bool is_dm = (motor->config_.motor_type == DM6006 ||
                         motor->config_.motor_type == DM4310);
     const bool connected = motor->check_connection(time);
-
-    // ── 达妙使能自愈（放在失联 continue 之前！）────────────────────────
-    // ⚠️ 失联(如 0xD 通讯丢失后电机不回帧→MOTOR_LOST)时若先 continue 就永远不会
-    //    再补发 0xFC → 电机永远红灯(死锁)。故对所有 DM(无论是否失联)，只要未确认
-    //    使能(err!=1 或失联)就周期性(100ms)补发 0xFC；故障态(err!=0)先 0xFB 清错。
+   //    使能(err!=1 或失联)就周期性(100ms)补发 0xFC；故障态(err!=0)先 0xFB 清错。
     if (is_dm)
     {
       static const std::array<uint8_t, 8> dm_clear{
@@ -556,10 +547,6 @@ SprHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& pe
       case DM6006:
       case DM4310:
       {
-        //（使能自愈已上移到 write() 顶部、失联 continue 之前，这里只发控制帧）
-        //命令为力矩(N·m)，按 MIT 帧 12 位线性映射打包，帧ID = 电机 CAN ID
-        //⚠️ 量纲/溢出保护：t_ff 只有 12bit、满量程 ±tor_max，控制器输出一旦超出
-        //   (如位置环输出几百 N·m) 会在 float_to_uint 里溢出回绕成错误值 → 先限幅
         const float tor_max = motor->config_.tor_max;
         const float t_cmd = std::clamp(
             static_cast<float>(command * motor->config_.direction), -tor_max, tor_max);
