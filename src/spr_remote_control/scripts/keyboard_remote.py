@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-# 哨兵键盘遥控（输入源之一）：在无真实遥控器/串口时用于 mujoco / mock 调试。
-# 对外接口与本包其它源一致：只经 RemoteCore 统一发布 cmd_vel 与 gimbal_cmd。
+# 哨兵键盘遥控节点（输入源之一）—— 自包含脚本，随统一遥控包 spr_remote_control
+# （C++ 主体）安装。在无真实遥控器/串口时用于 mujoco / mock 调试。
+# 对外接口与串口源(rc_serial_remote_cpp)一致，只经本节点状态持续发布：
+#   - cmd_vel (geometry_msgs/Twist)：底盘线/角速度
+#   - gimbal_controller/gimbal_cmd (spr_msgs/GimbalCmd)：云台模式 + 三轴绝对角
+#
+# 用法:
+#   ros2 run spr_remote_control keyboard_remote
 import sys
 import select
 import termios
@@ -8,12 +14,20 @@ import tty
 
 import rclpy
 from rclpy.node import Node
+from geometry_msgs.msg import Twist
+from spr_msgs.msg import GimbalCmd
 
-from spr_remote_control.remote_core import RemoteCore
+# 云台模式（与 spr_sentry_controllers/gimbal_controller 约定一致）
+GIMBAL_MODE_HOLD = 0    # 保持
+GIMBAL_MODE_SCAN = 1    # 扫描
+GIMBAL_MODE_AIM = 2     # 自瞄
+GIMBAL_MODE_REMOTE = 3  # 遥控
+
+GIMBAL_JOINTS = ('pitch', 'small_yaw', 'big_yaw')
 
 
 class KeyboardRemote(Node):
-    """键盘输入源：离散档位/步进语义，映射后写入 RemoteCore。"""
+    """键盘输入源：离散档位/步进语义，20Hz 持续发布 cmd_vel + gimbal_cmd。"""
 
     def __init__(self):
         super().__init__('keyboard_remote')
@@ -25,8 +39,31 @@ class KeyboardRemote(Node):
         self.turn = 0.5        # 角速度档 (rad/s)
         self.angle_step = 0.05  # 每按一次角度步进 (rad)
 
-        self.core = RemoteCore(self, publish_hz=20.0)
+        # 云台目标状态（默认遥控模式 3，三轴绝对角参考）
+        self.gimbal_mode = GIMBAL_MODE_REMOTE
+        self.angles = {joint: 0.0 for joint in GIMBAL_JOINTS}
+
+        # 持续发布：避免 BEST_EFFORT 首帧丢失，保证遥控模式持续生效
+        self.cmd_vel_pub_ = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.gimbal_pub_ = self.create_publisher(
+            GimbalCmd, 'gimbal_controller/gimbal_cmd', 10)
+        self.create_timer(1.0 / 20.0, self._tick)   # 20Hz
         self.print_help()
+
+    # ---------------- 周期发布 ----------------
+    def _tick(self):
+        twist = Twist()
+        twist.linear.x = self.vx
+        twist.linear.y = self.vy
+        twist.angular.z = self.wz
+        self.cmd_vel_pub_.publish(twist)
+
+        cmd = GimbalCmd()
+        cmd.mode = self.gimbal_mode
+        cmd.pitch_angle = self.angles['pitch']
+        cmd.small_yaw_angle = self.angles['small_yaw']
+        cmd.big_yaw_angle = self.angles['big_yaw']
+        self.gimbal_pub_.publish(cmd)
 
     # ---------------- 界面 ----------------
     def print_help(self):
@@ -46,17 +83,16 @@ class KeyboardRemote(Node):
 
     def show_status(self):
         """单行状态栏：用 \\r 覆盖当前行，不换行刷屏。"""
-        c = self.core
         sys.stdout.write(
-            f"\r[模式={c.gimbal_mode}  pitch={c.angles['pitch']:+.2f}"
-            f"  syaw={c.angles['small_yaw']:+.2f}"
-            f"  byaw={c.angles['big_yaw']:+.2f}"
-            f"  vx={c.vx:+.2f}  vy={c.vy:+.2f}  wz={c.wz:+.2f}]" + ' ' * 8)
+            f"\r[模式={self.gimbal_mode}  pitch={self.angles['pitch']:+.2f}"
+            f"  syaw={self.angles['small_yaw']:+.2f}"
+            f"  byaw={self.angles['big_yaw']:+.2f}"
+            f"  vx={self.vx:+.2f}  vy={self.vy:+.2f}  wz={self.wz:+.2f}]"
+            + ' ' * 8)
         sys.stdout.flush()
 
     # ---------------- 按键语义 ----------------
     def on_key(self, key):
-        c = self.core
         if key == 'h':
             self.print_help()
             return True
@@ -81,24 +117,23 @@ class KeyboardRemote(Node):
             self.speed = max(self.speed - 0.2, 0.1)
         # ---- 云台模式 ----
         elif key in ('0', '1', '2', '3'):
-            c.set_mode(int(key))
-        # ---- 云台角度微调 ----
+            self.gimbal_mode = int(key)
+        # ---- 云台角度微调（绝对角参考步进）----
         elif key == 'i':
-            c.step_angle('pitch', self.angle_step)
+            self.angles['pitch'] += self.angle_step
         elif key == 'k':
-            c.step_angle('pitch', -self.angle_step)
+            self.angles['pitch'] -= self.angle_step
         elif key == 'j':
-            c.step_angle('small_yaw', self.angle_step)
+            self.angles['small_yaw'] += self.angle_step
         elif key == 'l':
-            c.step_angle('small_yaw', -self.angle_step)
+            self.angles['small_yaw'] -= self.angle_step
         elif key == 'u':
-            c.step_angle('big_yaw', self.angle_step)
+            self.angles['big_yaw'] += self.angle_step
         elif key == 'o':
-            c.step_angle('big_yaw', -self.angle_step)
+            self.angles['big_yaw'] -= self.angle_step
         elif key in ('x', 'X'):
             return False
 
-        c.set_chassis(self.vx, self.vy, self.wz)
         self.show_status()
         return True
 

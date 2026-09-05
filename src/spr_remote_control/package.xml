@@ -2,17 +2,25 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>spr_remote_control</name>
-  <version>0.0.0</version>
-  <description>Remote control package for the sentry robot: interchangeable input sources (keyboard / DR16 serial DBUS) publishing unified cmd_vel and gimbal_cmd</description>
+  <version>0.1.0</version>
+  <description>
+    Sentry remote-control unified package (merged from the Python spr_remote_control
+    and C++ spr_remote_control_cpp). All input sources publish the same unified
+    cmd_vel (geometry_msgs/Twist) and gimbal_controller/gimbal_cmd (spr_msgs/GimbalCmd):
+      - rc_serial_remote_cpp (C++17): DJI DR16/DT7 receiver DBUS over serial (100000 bps)
+      - keyboard_remote (Python): keyboard source for mock / MuJoCo debugging
+  </description>
   <maintainer email="2786573564@qq.com">b</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>spr_msgs</depend>
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>spr_msgs</exec_depend>
-  <exec_depend>python3-serial</exec_depend>
 
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_cmake</build_type>
   </export>
 </package>
