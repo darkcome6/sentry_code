@@ -110,7 +110,8 @@ void SerialDriver::drain()
 
 void SerialDriver::flush(int queue)
 {
-  if (fd_ >= 0) ioctl(fd_, TCFLSH, queue);   // ioctl 替代 tcflush
+  if (fd_ >= 0) ioctl(fd_, TCFLSH, queue);   
+  // ioctl 代tcflush
 }
 
 ssize_t SerialDriver::send(const uint8_t * data, size_t len)
@@ -125,12 +126,12 @@ ssize_t SerialDriver::recv(uint8_t * data, size_t len)
 
 ssize_t SerialDriver::recv_timeout(uint8_t * data, size_t len, int timeout_ms)
 {
-  if (fd_ < 0) return -1;
-  struct pollfd pfd{fd_, POLLIN, 0};
-  int ret = poll(&pfd, 1, timeout_ms);
-  if (ret < 0) return -1;
-  if (ret == 0 || !(pfd.revents & POLLIN)) return 0;
-  return ::read(fd_, data, len);
+  if (fd_ < 0) return -1; // 串口没打开 → 报错
+  struct pollfd pfd{fd_, POLLIN, 0};// 声明要监听：fd_ 上是否有 POLLIN(可读)
+  int ret = poll(&pfd, 1, timeout_ms);// 阻塞等待最多 timeout_ms
+  if (ret < 0) return -1; // poll 出错(被信号打断等) → 报错
+  if (ret == 0 || !(pfd.revents & POLLIN)) return 0;// 超时/没可读 → 返回 0
+  return ::read(fd_, data, len);// 有数据了 → 真正读走，返回实际字节数
 }
 
 }  // namespace spr_remote_control

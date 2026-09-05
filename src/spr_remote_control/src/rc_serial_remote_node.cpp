@@ -1,7 +1,3 @@
-// 哨兵串口遥控接收节点（C++，统一包 spr_remote_control 的一部分）。
-// 用法示例（真机）:
-//   ros2 run spr_remote_control rc_serial_remote_cpp --ros-args
-//     -p device:=/dev/ttyTHS1 -p baudrate:=100000 -p parity:=even
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -22,7 +18,7 @@ namespace spr_remote_control
 {
 namespace
 {
-// 云台模式（与 spr_sentry_controllers/gimbal_controller 约定一致）
+// 云台模式
 constexpr uint8_t GIMBAL_MODE_HOLD = 0;    // 保持
 constexpr uint8_t GIMBAL_MODE_SCAN = 1;    // 扫描
 constexpr uint8_t GIMBAL_MODE_AIM = 2;     // 自瞄
@@ -56,9 +52,9 @@ public:
     cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
     gimbal_pub_ = create_publisher<spr_msgs::msg::GimbalCmd>(
       "gimbal_controller/gimbal_cmd", 10);
-    // 内部状态实时导出(≈Ozone 运行时看全局变量)：PlotJuggler / ros2 topic echo
-    debug_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>(
-      "remote_debug", 10);
+    // 原始解包通道值(无任何映射)，验证遥控/遥控器键盘用
+    raw_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>(
+      "rc_raw", 10);
 
     // 发布/映射节拍：publish_hz 与 DBUS 100Hz 对齐
     timer_ = create_wall_timer(
@@ -239,7 +235,7 @@ private:
     }
     if (stop) {
       publish_(0.0, 0.0, 0.0, have_frame);
-      publish_dbg_(rc, have_frame, 0.0, 0.0, 0.0);  // 失联停车这拍也发
+      publish_raw_(rc, have_frame);   // 失联这拍也保留最后原始帧
       return;
     }
     // 更新模式（可能来自本拍前的帧，直接沿用最新快照 rc）
@@ -262,7 +258,7 @@ private:
     }
 
     publish_(vx, vy, wz, have_frame);
-    publish_dbg_(rc, have_frame, vx, vy, wz);  // 实时导出内部状态到 /remote_debug
+    publish_raw_(rc, have_frame);  // 解包原始通道值实时导出到 /rc_raw
 
     // 节流日志（每 20 帧 ≈ 5Hz）
     if (have_frame && (fc % 20 == 0)) {
@@ -295,36 +291,38 @@ private:
     gimbal_pub_->publish(std::move(cmd));
   }
 
-  // ---------------- 内部状态实时导出（/remote_debug）----------------
-  // 每拍把内部状态发成 std_msgs/Float64MultiArray，PlotJuggler 或
-  // `ros2 topic echo /remote_debug` 可运行中实时查看（≈MCU 调试器 Live Watch）。
-  // data 布局：0 mode | 1 vx 2 vy 3 wz | 4 pitch 5 syaw 6 byaw |
-  //            7..10 ch_norm[0..3] | 11 s0 12 s1 |
-  //            13 frame_count | 14 got_frame | 15 lost
-  void publish_dbg_(const RCData & rc, bool have_frame, double vx, double vy,
-                    double wz)
+  // ---------------- 原始通道实时导出（/rc_raw）----------------
+
+  // /rc_raw (std_msgs/Float64MultiArray) —— 解包后的原始通道值(无任何映射)：
+  //   0..4  ch0..ch4：去偏原始摇杆(int16, 中位 1024, 满幅≈±660)
+  //   5     s0 左拨杆 | 6   s1 右拨杆 (1上/2下/3中)
+  //   7..9  mouse_x / mouse_y / mouse_z
+  //   10    mouse_press_l | 11  mouse_press_r
+  //   12    key(遥控器自带键盘 16bit)
+  //   13    frame_count(累计有效帧数)
+  // 仅在收到有效帧时发布。
+  void publish_raw_(const RCData & rc, bool have_frame)
   {
-    if (!debug_pub_) {
+    if (!raw_pub_ || !have_frame) {
       return;
-    }
-    double chn[4] = {0.0, 0.0, 0.0, 0.0};
-    if (have_frame) {
-      for (int k = 0; k < 4; ++k) {
-        chn[k] = norm_stick(rc.ch[k], deadzone_);
-      }
     }
     auto msg = std::make_unique<std_msgs::msg::Float64MultiArray>();
     msg->data = {
-      static_cast<double>(mode_),
-      vx, vy, wz,
-      pitch_angle_, small_yaw_angle_, big_yaw_angle_,
-      chn[0], chn[1], chn[2], chn[3],
+      static_cast<double>(rc.ch[0]),
+      static_cast<double>(rc.ch[1]),
+      static_cast<double>(rc.ch[2]),
+      static_cast<double>(rc.ch[3]),
+      static_cast<double>(rc.ch[4]),
       static_cast<double>(rc.s[0]),
       static_cast<double>(rc.s[1]),
-      static_cast<double>(frame_count_),
-      have_frame ? 1.0 : 0.0,
-      lost_ ? 1.0 : 0.0};
-    debug_pub_->publish(std::move(msg));
+      static_cast<double>(rc.mouse_x),
+      static_cast<double>(rc.mouse_y),
+      static_cast<double>(rc.mouse_z),
+      static_cast<double>(rc.mouse_press_l),
+      static_cast<double>(rc.mouse_press_r),
+      static_cast<double>(rc.key),
+      static_cast<double>(frame_count_)};
+    raw_pub_->publish(std::move(msg));
   }
 
   // ---------------- 成员 ----------------
@@ -352,7 +350,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<spr_msgs::msg::GimbalCmd>::SharedPtr gimbal_pub_;
-  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr raw_pub_;
 
   // 读线程与定时器共享（mutex_ 保护）
   std::mutex mutex_;
