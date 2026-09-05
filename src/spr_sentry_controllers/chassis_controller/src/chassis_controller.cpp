@@ -135,7 +135,7 @@ controller_interface::return_type ChassisController::update(
 
   return controller_interface::return_type::OK;
 }
-{}
+
 
 
 controller_interface::CallbackReturn ChassisController::on_activate(
