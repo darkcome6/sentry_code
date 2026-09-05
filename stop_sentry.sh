@@ -49,7 +49,7 @@ kill_by_pattern "ros2_control_node"          # controller_manager 主节点（�
 kill_by_pattern "robot_state_publisher"     # TF / robot_description
 kill_by_pattern "sentry_bringup"            # 本项目 launch 进程
 kill_by_pattern "controller_manager/spawner" # 控制器 spawner（精确匹配路径，避免误杀）
-kill_by_pattern "teleop_sentry"             # 遥控节点
+kill_by_pattern "keyboard_remote|rc_serial_remote"  # 遥控节点(键盘/串口源)
 
 sleep 0.5
 
