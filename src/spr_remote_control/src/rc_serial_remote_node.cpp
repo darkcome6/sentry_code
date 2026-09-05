@@ -1,23 +1,7 @@
 // 哨兵串口遥控接收节点（C++，统一包 spr_remote_control 的一部分）。
-// 行为等价早期 Python 版 rc_serial_remote（该 Python 实现与 dbus.py/remote_core.py
-// 已在本包整合时删除，串口源统一用本 C++ 版本）。
-//
-// DR16/DT7 接收机 DBUS(18B @~100Hz) 串口直连上位机：
-//   读线程  → 滑动解码（合法性判帧 + 1 字节重同步）→ 更新共享快照
-//   定时器  → 按快照映射底盘速度/云台模式与角度 → 发布 cmd_vel + gimbal_cmd
-//
-// 结构参照参考实现 dt7_receiver（独立读线程 + termios2 串口驱动 + DBUS 解析库）。
-// 对外话题/语义与键盘源一致：
-//   - cmd_vel (geometry_msgs/Twist)：左拨杆 s0 非"下"档才允许底盘运动
-//   - gimbal_controller/gimbal_cmd (spr_msgs/GimbalCmd)：右拨杆 s1 三档切模式
-//   - 遥控模式(3)下右杆竖直 → pitch 绝对角增量积分（松杆即停）
-//   - 失联保护：超过 lost_timeout 无有效帧 → 底盘停车
-//   - 未收到首帧前不发布 gimbal_cmd（gimbal_enabled=false），避免抢占其它模式
-//
 // 用法示例（真机）:
 //   ros2 run spr_remote_control rc_serial_remote_cpp --ros-args
 //     -p device:=/dev/ttyTHS1 -p baudrate:=100000 -p parity:=even
-
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -28,6 +12,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 #include <spr_msgs/msg/gimbal_cmd.hpp>
 
 #include "spr_remote_control/serial_driver.hpp"
@@ -71,6 +56,9 @@ public:
     cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
     gimbal_pub_ = create_publisher<spr_msgs::msg::GimbalCmd>(
       "gimbal_controller/gimbal_cmd", 10);
+    // 内部状态实时导出(≈Ozone 运行时看全局变量)：PlotJuggler / ros2 topic echo
+    debug_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>(
+      "remote_debug", 10);
 
     // 发布/映射节拍：publish_hz 与 DBUS 100Hz 对齐
     timer_ = create_wall_timer(
@@ -251,6 +239,7 @@ private:
     }
     if (stop) {
       publish_(0.0, 0.0, 0.0, have_frame);
+      publish_dbg_(rc, have_frame, 0.0, 0.0, 0.0);  // 失联停车这拍也发
       return;
     }
     // 更新模式（可能来自本拍前的帧，直接沿用最新快照 rc）
@@ -273,6 +262,7 @@ private:
     }
 
     publish_(vx, vy, wz, have_frame);
+    publish_dbg_(rc, have_frame, vx, vy, wz);  // 实时导出内部状态到 /remote_debug
 
     // 节流日志（每 20 帧 ≈ 5Hz）
     if (have_frame && (fc % 20 == 0)) {
@@ -305,6 +295,38 @@ private:
     gimbal_pub_->publish(std::move(cmd));
   }
 
+  // ---------------- 内部状态实时导出（/remote_debug）----------------
+  // 每拍把内部状态发成 std_msgs/Float64MultiArray，PlotJuggler 或
+  // `ros2 topic echo /remote_debug` 可运行中实时查看（≈MCU 调试器 Live Watch）。
+  // data 布局：0 mode | 1 vx 2 vy 3 wz | 4 pitch 5 syaw 6 byaw |
+  //            7..10 ch_norm[0..3] | 11 s0 12 s1 |
+  //            13 frame_count | 14 got_frame | 15 lost
+  void publish_dbg_(const RCData & rc, bool have_frame, double vx, double vy,
+                    double wz)
+  {
+    if (!debug_pub_) {
+      return;
+    }
+    double chn[4] = {0.0, 0.0, 0.0, 0.0};
+    if (have_frame) {
+      for (int k = 0; k < 4; ++k) {
+        chn[k] = norm_stick(rc.ch[k], deadzone_);
+      }
+    }
+    auto msg = std::make_unique<std_msgs::msg::Float64MultiArray>();
+    msg->data = {
+      static_cast<double>(mode_),
+      vx, vy, wz,
+      pitch_angle_, small_yaw_angle_, big_yaw_angle_,
+      chn[0], chn[1], chn[2], chn[3],
+      static_cast<double>(rc.s[0]),
+      static_cast<double>(rc.s[1]),
+      static_cast<double>(frame_count_),
+      have_frame ? 1.0 : 0.0,
+      lost_ ? 1.0 : 0.0};
+    debug_pub_->publish(std::move(msg));
+  }
+
   // ---------------- 成员 ----------------
   // 参数
   std::string device_;
@@ -330,6 +352,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
   rclcpp::Publisher<spr_msgs::msg::GimbalCmd>::SharedPtr gimbal_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr debug_pub_;
 
   // 读线程与定时器共享（mutex_ 保护）
   std::mutex mutex_;

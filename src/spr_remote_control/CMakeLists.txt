@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(spr_msgs REQUIRED)
 
 # ─── 串口驱动库（termios2，支持 DR16 DBUS 的 100000bps 非标准波特率）───
@@ -29,7 +30,7 @@ target_include_directories(spr_dbus_parser PUBLIC
 # ─── 串口遥控接收主节点（最新版 C++：读线程解码 → 定时发布 cmd_vel + gimbal_cmd）───
 #   用法: ros2 run spr_remote_control rc_serial_remote_cpp --ros-args -p device:=/dev/ttyTHS1
 add_executable(rc_serial_remote_cpp src/rc_serial_remote_node.cpp)
-ament_target_dependencies(rc_serial_remote_cpp rclcpp geometry_msgs spr_msgs)
+ament_target_dependencies(rc_serial_remote_cpp rclcpp geometry_msgs std_msgs spr_msgs)
 target_link_libraries(rc_serial_remote_cpp spr_serial_driver spr_dbus_parser)
 install(TARGETS rc_serial_remote_cpp DESTINATION lib/${PROJECT_NAME})
 

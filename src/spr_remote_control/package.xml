@@ -17,6 +17,7 @@
 
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>spr_msgs</depend>
   <exec_depend>rclpy</exec_depend>
 
