@@ -2,6 +2,16 @@ controller_manager:
   ros__parameters:
     update_rate: 500  # Hz（虚拟机调试建议 500；真机可恢复 1000）
 
+    # 必须关闭内存锁定（重要）：
+    # mujoco_ros2_control 节点默认开启 lock_memory=true，会对进程执行
+    # mlockall(MCL_CURRENT|MCL_FUTURE) 锁定全部内存。本机 MuJoCo 场景加载后
+    # RSS≈925MB，而本机 RLIMIT_MEMLOCK(ulimit -l) 仅 909MB，configure 控制器时
+    # 分配新内存（PID/订阅器/发布器/RealtimePublisher 线程栈）无法锁定，
+    # 报 "Resource temporarily unavailable" (EAGAIN)，导致所有控制器配置失败。
+    # 另一台电脑正常是因为其 RLIMIT_MEMLOCK 更大/无限制。
+    # 仿真场景无需实时锁内存；若需保留实时保护，请提高系统 RLIMIT_MEMLOCK。
+    lock_memory: false
+
     joint_state_broadcaster:
       type: "joint_state_broadcaster/JointStateBroadcaster"
     gimbal_controller:
