@@ -49,9 +49,11 @@ public:
     declare_params_();
     read_params_();
 
-    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+    // 控制器话题（与接口契约一致）：/chassis_controller/cmd_vel、/gimbal_controller/gimbal_cmd
+    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>(
+      "/chassis_controller/cmd_vel", 10);
     gimbal_pub_ = create_publisher<spr_msgs::msg::GimbalCmd>(
-      "gimbal_controller/gimbal_cmd", 10);
+      "/gimbal_controller/gimbal_cmd", 10);
     // 原始解包通道值(无任何映射)，验证遥控/遥控器键盘用
     raw_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>(
       "rc_raw", 10);

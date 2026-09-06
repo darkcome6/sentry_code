@@ -31,18 +31,6 @@ using controller_interface::InterfaceConfiguration;
     cmd->small_yaw_angle = 0.0;
     cmd->big_yaw_angle = 0.0;
     recv_cmd_ptr_.initRT(cmd);
-    /// @brief 初始化外部状态实时缓冲区，存储初始零值
-    auto state =std::make_shared<STATE>();
-    state->mode = 0;
-    
-    state->pitch_angle_ref = 0.0;
-    state->small_yaw_angle_ref = 0.0;
-    state->big_yaw_angle_ref = 0.0;
-
-    state->pitch_current_ref = 0.0;
-    state->small_yaw_current_ref = 0.0;
-    state->big_yaw_current_ref = 0.0;
-    ex_state_rt_.initRT(state);
     return controller_interface::CallbackReturn::SUCCESS;
 };
 
@@ -92,12 +80,14 @@ using controller_interface::InterfaceConfiguration;
     /// @brief 命令订阅器传入指针，~/gimbal_cmd话题，实时写入双缓存区
     cmd_sub_ = get_node()->create_subscription<CMD>(
         "~/gimbal_cmd", rclcpp::SystemDefaultsQoS(),
-        [this](const std::shared_ptr<CMD> msg) -> void {  recv_cmd_ptr_.writeFromNonRT(msg); });
-    /// @brief 外部状态订阅器传入指针，~/ex_state_interface ，实时写入双缓存区
-    ex_state_sub_ = get_node()->create_subscription<STATE>(
-        "~/ex_state_interface", rclcpp::SensorDataQoS(),
-        [this](const std::shared_ptr<STATE> msg) -> void { ex_state_rt_.writeFromNonRT(msg); });
-    /// @brief  创建外部状态发布器
+        [this](const std::shared_ptr<CMD> msg) -> void {
+          recv_cmd_ptr_.writeFromNonRT(msg);
+          // 自瞄信号看门狗：记录最近一次 mode=2(自瞄) 指令时间戳
+          if (msg->mode == 2) {
+            aim_cmd_stamp_s_.store(get_node()->now().seconds());
+          }
+        });
+    /// @brief 创建云台状态发布器
     auto gimbal_state_pub =
       get_node()->create_publisher<STATE>("~/gimbal_state", rclcpp::SystemDefaultsQoS());
     /// @brief 将 外部状态发布器 包装为 实时安全发布器
@@ -131,17 +121,27 @@ using controller_interface::InterfaceConfiguration;
   switch (mode_)
   {
     case 0:   // 保持不动：目标=当前反馈
+      target_valid_ = false;
       break;
-    case 1:
+    case 1:   // 扫描：三角波旋转
+      target_valid_ = false;
       target = scan_mode();
       break;
-    case 2:
-      target = aim_mode();
+    case 2:   // 自瞄：跟 gimbal_cmd 里的视觉目标角；信号超时自动回落扫描（视觉丢目标兜底）
+      if (time.seconds() - aim_cmd_stamp_s_.load() > params_.aim_timeout) {
+        target_valid_ = false;
+        target = scan_mode();
+      } else {
+        target_valid_ = true;
+        target = aim_mode();
+      }
       break;
-    case 3:
+    case 3:   // 遥控：跟手动三轴角
+      target_valid_ = false;
       target = remote_control();
       break;
     default:
+      target_valid_ = false;
       break;
   }
 
@@ -247,13 +247,7 @@ using controller_interface::InterfaceConfiguration;
   /// @brief 扫描模式：时间驱动平滑扫描；一旦视觉给出有效目标，自动切到自瞄跟踪
   std::array<double, 3> SprGimbalController::scan_mode()
   {
-    // 1) 目标协同：有有效视觉目标 → 直接转自瞄跟踪（扫↔跟切换）
-    if (target_valid_)
-    {
-      return aim_mode();
-    }
-
-    // 2) 时间驱动三角波扫描（与 update 帧率无关，天然无跳变）
+    // 时间驱动三角波扫描（与 update 帧率无关，天然无跳变）
     //    相比"每帧加固定步长"，用墙钟时间算扫描角，帧率抖动不影响轨迹
     const double range_min = params_.pitch.scan_range[0];
     const double range_max = params_.pitch.scan_range[1];
@@ -279,11 +273,11 @@ using controller_interface::InterfaceConfiguration;
   /// @brief 自瞄模式：读取视觉话题(外部状态)目标角度，并记录跟踪状态供扫描切换
   std::array<double, 3> SprGimbalController::aim_mode()
   {
-    auto state = *ex_state_rt_.readFromRT();
-    // 视觉目标（角度）——话题结构按你的约定：pitch/yaw 目标角 + 目标角速度
-    target_pitch_ = state->pitch_angle_ref;
-    target_yaw_ = state->small_yaw_angle_ref;
-    target_valid_ = true;
+    auto cmd = *recv_cmd_ptr_.readFromRT();
+    // 自瞄目标角直接取自 gimbal_cmd（合并后单一指令通道）：
+    //   pitch_angle = 视觉目标 pitch；small_yaw_angle = 视觉目标 yaw
+    target_pitch_ = cmd->pitch_angle;
+    target_yaw_ = cmd->small_yaw_angle;
 
     // TODO(速度前馈)：视觉给的目标角速度可在这里读出来，叠加到位置命令上，
     // 用于补偿跟踪滞后（没有 IMU 时这是唯一的前馈来源）

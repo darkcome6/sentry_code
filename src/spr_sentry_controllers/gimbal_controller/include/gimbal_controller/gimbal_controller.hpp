@@ -14,6 +14,8 @@
 #include "realtime_tools/realtime_box.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
 
+#include <atomic>
+
 namespace spr_gimbal_controller
 {
 class SprGimbalController : public controller_interface::ControllerInterface
@@ -81,10 +83,8 @@ private:
   //消息类型别名 命令格式 状态格式
   using CMD = spr_msgs::msg::GimbalCmd;
   using STATE = spr_msgs::msg::GimbalState;
-  /// @brief /外部状态订阅器
-  rclcpp::Subscription<STATE>::SharedPtr ex_state_sub_ = nullptr;
-  /// @brief /外部状态实时缓冲区，存储最新的外部状态
-  realtime_tools::RealtimeBuffer<std::shared_ptr<STATE>> ex_state_rt_{ nullptr };
+  /// @brief 自瞄信号看门狗：最近一次收到 mode=2(自瞄) 指令的时间戳(s)
+  std::atomic<double> aim_cmd_stamp_s_{ -1.0 };
   /// @brief /外部命令订阅器
   rclcpp::Subscription<CMD>::SharedPtr cmd_sub_ = nullptr;
   /// @brief /外部命令实时缓冲区，存储最新的外部命令

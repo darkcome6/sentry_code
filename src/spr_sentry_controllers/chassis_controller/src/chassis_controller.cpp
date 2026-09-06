@@ -78,9 +78,9 @@ controller_interface::CallbackReturn ChassisController::on_configure(
     }
   }
 
-  // 底盘速度指令订阅（/cmd_vel），实时写入双缓存
+  // 底盘速度指令订阅（~/cmd_vel → 全名 /chassis_controller/cmd_vel），实时写入双缓存
   cmd_vel_sub_ = get_node()->create_subscription<geometry_msgs::msg::Twist>(
-    "cmd_vel", rclcpp::SystemDefaultsQoS(),
+    "~/cmd_vel", rclcpp::SystemDefaultsQoS(),
     [this](const std::shared_ptr<geometry_msgs::msg::Twist> msg) -> void {
       cmd_vel_rt_.writeFromNonRT(msg);
     });

@@ -1,4 +1,9 @@
 spr_gimbal_controller:
+ aim_timeout: {
+   type: double,
+   default_value: 0.2,
+   description: "自瞄信号看门狗(s)：距上次收到 mode=2 自瞄指令超过该时长，自动回落扫描"
+ }
  pitch:
     joint: {
       type: string,

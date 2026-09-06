@@ -20,6 +20,8 @@ controller_manager:
       type: "spr_chassis_controller/ChassisController"
 gimbal_controller:
   ros__parameters:
+    # 自瞄信号看门狗：视觉丢目标后超过该时长未再收到 mode=2 指令，自动回落扫描
+    aim_timeout: 0.2
     # 量纲：位置环输出 = 力矩(N·m)。P 增益单位 N·m/rad。
     pitch:
       joint: "pitch_joint"
