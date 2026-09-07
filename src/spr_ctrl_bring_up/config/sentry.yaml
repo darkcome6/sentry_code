@@ -1,4 +1,4 @@
-controller_manager:
+/sentry/controller_manager:
   ros__parameters:
     update_rate: 500  # Hz（虚拟机调试建议 500；真机可恢复 1000）
 
@@ -18,7 +18,7 @@ controller_manager:
       type: "spr_gimbal_controller/SprGimbalController"
     chassis_controller:
       type: "spr_chassis_controller/ChassisController"
-gimbal_controller:
+/sentry/gimbal_controller:
   ros__parameters:
     # 自瞄信号看门狗：视觉丢目标后超过该时长未再收到 mode=2 指令，自动回落扫描
     aim_timeout: 0.2
@@ -71,7 +71,7 @@ gimbal_controller:
         i_clamp_max: 1.0
         output_min: -30000.0
         output_max: 30000.0
-chassis_controller:
+/sentry/chassis_controller:
   ros__parameters:
     # 麦克纳姆轮底盘几何（必须与 URDF 一致：轮半径0.1, 轴距0.4, 轮距0.5）
     wheel_base: 0.4

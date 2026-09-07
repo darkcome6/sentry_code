@@ -23,6 +23,24 @@ struct PidParams
   double anti_windup_gain = 1.0;      // 抗饱和回退增益（0 = 关闭回退，只靠积分限幅）
 };
 
+// 每一步的分项快照：调试可见 P/I/D/前馈各项输出、目标/反馈/误差与饱和状态
+struct PidTrace
+{
+  double kp = 0.0;               // 当前生效比例增益
+  double ki = 0.0;               // 当前生效积分增益
+  double kd = 0.0;               // 当前生效微分增益
+  double target = 0.0;           // 目标值
+  double feedback = 0.0;         // 反馈值
+  double error = 0.0;            // error = target - feedback
+  double p_term = 0.0;           // P 项输出 = kp * error
+  double i_term = 0.0;           // I 项输出（积分累积，含 ki，抗饱和后）
+  double d_term = 0.0;           // D 项输出（低通后微分 * kd）
+  double feedforward_term = 0.0; // 前馈项（外部注入，如重力补偿）
+  double output = 0.0;           // 总输出（含前馈，限幅后）
+  double integral = 0.0;         // 积分累积（抗饱和回退后）
+  bool saturated = false;        // 是否输出饱和
+};
+
 class PidController
 {
 public:
@@ -32,12 +50,13 @@ public:
   void setParams(const PidParams & params);
   const PidParams & params() const {return params_;}
 
-  // 误差→控制量；dt 采样周期(s)
-  double update(double error, double dt);
+  // 目标/反馈/前馈 → 控制量；dt 采样周期(s)。前馈用于重力补偿等模型补偿。
+  double update(double target, double feedback, double feedforward, double dt);
   void reset();
 
   double integral() const {return integral_;}
   double filteredDerivative() const {return filtered_derivative_;}
+  const PidTrace & trace() const {return trace_;}
 
 private:
   PidParams params_;
@@ -45,6 +64,7 @@ private:
   double prev_error_ = 0.0;
   double filtered_derivative_ = 0.0;
   bool initialized_ = false;
+  PidTrace trace_;
 };
 
 }  // namespace spr_control_algorithms

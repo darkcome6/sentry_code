@@ -17,14 +17,14 @@ cd "$(dirname "$0")"
 OUT_DIR="${1:-bags}"
 mkdir -p "$OUT_DIR"
 
-# 过滤出关心的话题：
-#   /joint_states              关节状态（位置/速度/力矩，joint_state_broadcaster）
-#   /gimbal_controller/...     云台指令/状态 + PID 诊断（含 p_error）
-#   /chassis_controller/cmd_vel  底盘速度指令（控制器私有命名）
-#   /clock                     仿真时钟（回放必需）
+# 过滤出关心的话题（整车收在 /sentry 命名空间下）:
+#   /sentry/joint_states         关节状态（位置/速度/力矩，joint_state_broadcaster）
+#   /sentry/gimbal_controller/... 云台指令/状态 + PID 诊断
+#   /sentry/chassis_controller/... 底盘指令 + PID 诊断
+#   /clock                       仿真时钟（回放必需）
 readarray -t TOPICS < <(
   ros2 topic list 2>/dev/null \
-    | grep -E '^/(joint_states|clock|gimbal_controller/|chassis_controller/)' \
+    | grep -E '^/(sentry/|clock)' \
     | grep -v '/parameter' \
     | sort -u
 )

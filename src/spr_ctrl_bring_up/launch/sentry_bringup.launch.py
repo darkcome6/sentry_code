@@ -11,6 +11,8 @@ def launch_setup(context, *args, **kwargs):
     pkg_share = get_package_share_directory('spr_ctrl_bring_up')
     xacro_file = os.path.join(pkg_share, 'description', 'sentry.xacro')
     params_file = os.path.join(pkg_share, 'config', 'sentry.yaml')
+    # 整车命名空间：车的话题（cmd/state/pid_state/joint_states）收进 /sentry 话题树；TF 例外保持全局根
+    NS = '/sentry'
 
     hardware_type = LaunchConfiguration('hardware_type').perform(context)
     scene = LaunchConfiguration('scene').perform(context)
@@ -35,9 +37,11 @@ def launch_setup(context, *args, **kwargs):
         control_node = Node(
             package='mujoco_ros2_control',
             executable='ros2_control_node',
+            namespace=NS,
             parameters=[{'use_sim_time': True}, params_file],
-            # Humble 下从 /robot_description 话题读取 robot_description
-            remappings=[('~/robot_description', '/robot_description')]
+            # Humble 下 controller_manager 从 ~/robot_description 读描述；
+            # 节点在 /sentry，rsp 也在 /sentry → 相对名匹配 /sentry/robot_description
+            remappings=[('~/robot_description', 'robot_description')]
             if os.environ.get('ROS_DISTRO') == 'humble' else [],
             output='screen',
             on_exit=Shutdown(),
@@ -48,6 +52,7 @@ def launch_setup(context, *args, **kwargs):
         control_node = Node(
             package='controller_manager',
             executable='ros2_control_node',
+            namespace=NS,
             parameters=[robot_description, params_file, {'use_sim_time': use_sim_time}],
             output='screen',
         )
@@ -56,7 +61,8 @@ def launch_setup(context, *args, **kwargs):
         return Node(
             package='controller_manager',
             executable='spawner',
-            arguments=[controller, '--controller-manager', '/controller_manager'],
+            namespace=NS,
+            arguments=[controller, '--controller-manager', NS + '/controller_manager'],
             output='screen',
         )
 
@@ -69,6 +75,9 @@ def launch_setup(context, *args, **kwargs):
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
+            namespace=NS,
+            # TF 保持全局根（rviz/nav 等依赖 /tf），其余话题收进 /sentry
+            remappings=[('/tf', '/tf'), ('/tf_static', '/tf_static')],
             parameters=[robot_description, {'use_sim_time': sim_time}],
             output='screen',
         ),

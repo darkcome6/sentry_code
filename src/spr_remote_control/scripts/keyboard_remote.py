@@ -2,8 +2,8 @@
 # 哨兵键盘遥控节点（输入源之一）—— 自包含脚本，随统一遥控包 spr_remote_control
 # （C++ 主体）安装。在无真实遥控器/串口时用于 mujoco / mock 调试。
 # 对外接口与串口源(rc_serial_remote_cpp)一致，只经本节点状态持续发布：
-#   - /chassis_controller/cmd_vel (geometry_msgs/Twist)：底盘线/角速度
-#   - /gimbal_controller/gimbal_cmd (spr_msgs/GimbalCmd)：云台模式 + 三轴绝对角
+#   - /sentry/chassis_controller/cmd_vel (geometry_msgs/Twist)：底盘线/角速度
+#   - /sentry/gimbal_controller/gimbal_cmd (spr_msgs/GimbalCmd)：云台模式 + 三轴绝对角
 #
 # 用法:
 #   ros2 run spr_remote_control keyboard_remote
@@ -29,7 +29,7 @@ MODE_NAMES = {0: '保持', 1: '扫描', 2: '自瞄', 3: '遥控'}
 
 
 class KeyboardRemote(Node):
-    """键盘输入源：离散档位/步进语义，20Hz 持续发布 /chassis_controller/cmd_vel + /gimbal_controller/gimbal_cmd。"""
+    """键盘输入源：离散档位/步进语义，20Hz 持续发布 /sentry/chassis_controller/cmd_vel + /sentry/gimbal_controller/gimbal_cmd。"""
 
     def __init__(self):
         super().__init__('keyboard_remote')
@@ -46,9 +46,9 @@ class KeyboardRemote(Node):
         self.angles = {joint: 0.0 for joint in GIMBAL_JOINTS}
 
         # 持续发布：避免 BEST_EFFORT 首帧丢失，保证遥控模式持续生效
-        self.cmd_vel_pub_ = self.create_publisher(Twist, '/chassis_controller/cmd_vel', 10)
+        self.cmd_vel_pub_ = self.create_publisher(Twist, '/sentry/chassis_controller/cmd_vel', 10)
         self.gimbal_pub_ = self.create_publisher(
-            GimbalCmd, '/gimbal_controller/gimbal_cmd', 10)
+            GimbalCmd, '/sentry/gimbal_controller/gimbal_cmd', 10)
         self.create_timer(1.0 / 20.0, self._tick)   # 20Hz
         self.print_help()
 
